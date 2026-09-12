@@ -20,9 +20,9 @@ function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number })
   return <div className="meter" aria-label={`${value} percent`}><span className={tone} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
-function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, incoming = 0, admin, onSet, extraControl, verticalMeter = false }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; incoming?: number; admin: boolean; onSet: (value: number) => void; extraControl?: React.ReactNode; verticalMeter?: boolean }) {
+function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, incoming = 0, admin, onSet, extraControl, verticalMeter = false, low }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; incoming?: number; admin: boolean; onSet: (value: number) => void; extraControl?: React.ReactNode; verticalMeter?: boolean; low?: boolean }) {
   return (
-    <article className={`supply-card${percent <= 25 ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
+    <article className={`supply-card${(low ?? percent <= 25) ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
       <div className="card-top"><div className="card-title-line"><span className="icon-box">{icon}</span><h3>{title}</h3></div></div>
       <div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div>
       {verticalMeter ? <div className="ink-level-wrap"><div className="ink-level" aria-label={`${percent} percent ink`}><span style={{ height: `${percent}%` }} /></div><strong>{percent}%</strong></div> : <Meter value={percent} />}
@@ -36,6 +36,10 @@ function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, 
 function StatusBadge({ status }: { status: PortalOrder["status"] }) {
   const labels = { pending: "Pending", shipped: "Shipped", delivered: "Delivered" };
   return <span className={`status ${status}`}><i />{labels[status]}</span>;
+}
+
+function displayOrderNumber(orderNumber: string) {
+  return /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(orderNumber) ? `#${orderNumber.slice(0, 8).toUpperCase()}` : orderNumber;
 }
 
 export default function Dashboard({ initialOrders, initialConnected, initialMessage, session }: Props) {
@@ -146,6 +150,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const availablePolyBags = Math.max(0, supplies.polyBags - committedUnits);
   const availableCapacity = Math.min(availableMats, availableBoxes, availableTapeMatCapacity, availableThankYouCards, availablePolyBags);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
+  const inventoryWarning = availableCapacity <= 0;
 
   return (
     <main>
@@ -159,13 +164,13 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
-        <div className="dashboard-section-heading"><div><span>01</span><h2>Inventory &amp; Supplies</h2></div><p>On-hand, committed, and available materials</p></div>
+        <div className="dashboard-section-heading"><div><span>01</span><h2>Inventory &amp; Supplies</h2>{inventoryWarning && <strong className="inventory-warning"><AlertTriangle size={17}/>Inventory needs to be purchased</strong>}</div><p>On-hand, committed, and available materials</p></div>
         <section className="supply-grid">
-          <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} incoming={incoming.mats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
-          <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} incoming={incoming.boxes} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
-          <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`} percent={supplies.tape > 10 ? 100 : supplies.tape * 10} committed={committedTapeRolls} available={availableTape} incoming={incoming.tape} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} extraControl={<label className="manual-adjust"><span>Mats per roll</span><input type="number" min="1" value={tapeCoverage} onChange={(event) => setSupply("tapeCoverage", Math.max(1, Number(event.target.value)))} /></label>} />
-          <SupplyCard icon={<Mail size={21}/>} title="Thank-you cards" value={supplies.thankYouCards} unit="cards" detail="One reserved per pending mat" percent={supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4} committed={committedUnits} available={availableThankYouCards} incoming={incoming.thankYouCards} admin={view === "admin"} onSet={(value) => setSupply("thankYouCards", value)} />
-          <SupplyCard icon={<ShoppingBag size={21}/>} title="Poly bags" value={supplies.polyBags} unit="bags" detail="One reserved per pending mat" percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4} committed={committedUnits} available={availablePolyBags} incoming={incoming.polyBags} admin={view === "admin"} onSet={(value) => setSupply("polyBags", value)} />
+          <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} incoming={incoming.mats} low={availableMats <= 0} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
+          <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} incoming={incoming.boxes} low={availableBoxes <= 0} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
+          <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`} percent={supplies.tape > 10 ? 100 : supplies.tape * 10} committed={committedTapeRolls} available={availableTape} incoming={incoming.tape} low={availableTapeMatCapacity <= 0} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} extraControl={<label className="manual-adjust"><span>Mats per roll</span><input type="number" min="1" value={tapeCoverage} onChange={(event) => setSupply("tapeCoverage", Math.max(1, Number(event.target.value)))} /></label>} />
+          <SupplyCard icon={<Mail size={21}/>} title="Thank-you cards" value={supplies.thankYouCards} unit="cards" detail="One reserved per pending mat" percent={supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4} committed={committedUnits} available={availableThankYouCards} incoming={incoming.thankYouCards} low={availableThankYouCards <= 0} admin={view === "admin"} onSet={(value) => setSupply("thankYouCards", value)} />
+          <SupplyCard icon={<ShoppingBag size={21}/>} title="Poly bags" value={supplies.polyBags} unit="bags" detail="One reserved per pending mat" percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4} committed={committedUnits} available={availablePolyBags} incoming={incoming.polyBags} low={availablePolyBags <= 0} admin={view === "admin"} onSet={(value) => setSupply("polyBags", value)} />
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} incoming={incoming.ink} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
         </section>
 
@@ -193,7 +198,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         <FinancialLogistics session={session} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply}/>
 
         <section className="panel orders-panel"><div className="orders-head"><div><p className="eyebrow">ORDER ACTIVITY</p><h2>Fulfillment queue</h2></div><div className="table-actions"><label className="search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search orders" /></label><select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option></select></div></div>
-          <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td><strong>{order.orderNumber}</strong></td><td>{order.customer}</td><td className="product-cell">{order.item}</td><td>{order.quantity}</td><td><StatusBadge status={order.status}/></td><td>{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
+          <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></td><td>{order.customer}</td><td className="product-cell">{order.item}</td><td>{order.quantity}</td><td><StatusBadge status={order.status}/></td><td>{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
           <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>Last sync: just now</span></footer>
         </section>
         {session.role === "admin" && view === "admin" && <AccessManager/>}
