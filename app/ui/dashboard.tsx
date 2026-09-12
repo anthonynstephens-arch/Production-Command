@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
+import AccessManager from "./access-manager";
 
 type Supply = { mats: number; boxes: number; ink: number; tape: number; tapeCoverage: number; tapeUsage: number; thankYouCards: number; polyBags: number };
 type Props = { initialOrders: PortalOrder[]; initialConnected: boolean; initialMessage?: string; session: PortalSession };
@@ -159,6 +160,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td><strong>{order.orderNumber}</strong></td><td>{order.customer}</td><td className="product-cell">{order.item}</td><td>{order.quantity}</td><td><StatusBadge status={order.status}/></td><td>{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
           <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>Last sync: just now</span></footer>
         </section>
+        {session.role === "admin" && view === "admin" && <AccessManager/>}
       </div>
     </main>
   );
