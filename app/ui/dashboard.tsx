@@ -17,8 +17,8 @@ function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number })
 function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, admin, onSet, extraControl }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; admin: boolean; onSet: (value: number) => void; extraControl?: React.ReactNode }) {
   return (
     <article className="supply-card">
-      <div className="card-top"><span className="icon-box">{icon}</span><span className={percent <= 25 ? "stock low" : "stock"}>{percent <= 25 ? "Low stock" : "In stock"}</span></div>
-      <div><p className="eyebrow">{title}</p><div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div></div>
+      <div className="card-top"><div className="card-title-line"><span className="icon-box">{icon}</span><h3>{title}</h3></div><span className={percent <= 25 ? "stock low" : "stock"}>{percent <= 25 ? "Low stock" : "In stock"}</span></div>
+      <div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div>
       <Meter value={percent} />
       {available !== undefined && <div className="allocation"><div><span>Committed</span><strong>{committed}</strong></div><div><span>Available</span><strong>{available}</strong></div></div>}
       <div className="supply-footer"><span>{detail}</span><div className="control-stack">{admin && <label className="manual-adjust"><span>Set count</span><input type="number" min="0" value={value} onChange={(event) => onSet(Number(event.target.value))} /></label>}{admin && extraControl}</div></div>
