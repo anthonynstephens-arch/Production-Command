@@ -58,7 +58,10 @@ export async function PATCH(request: Request) {
     quantity: normalized,
     unit: definition.unit,
     updated_at: new Date().toISOString(),
-    updated_by: session.userId,
+    // Portal sessions are backed by marsh_portal_users, while older database
+    // installations may still constrain this column to auth.users. Keeping
+    // the actor nullable avoids rejecting valid portal-admin inventory edits.
+    updated_by: null,
   }, { onConflict: "account_slug,item_key" });
 
   if (error) return Response.json({ error: "Could not save inventory." }, { status: 500 });
