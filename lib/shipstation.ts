@@ -9,6 +9,7 @@ export type PortalOrder = {
   shipDate?: string;
   trackingNumber?: string;
   carrier?: string;
+  items?: Array<{ name: string; quantity: number }>;
 };
 
 type ShipStationOrder = {
@@ -74,6 +75,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
         quantity: order.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
         status: normalizeStatus(order.orderStatus), orderDate: order.orderDate ?? new Date().toISOString(), shipDate: order.shipDate,
         trackingNumber: order.trackingNumber, carrier: order.carrierCode?.toUpperCase(),
+        items: order.items?.map(item => ({ name: item.name ?? "Marsh Supply order", quantity: item.quantity ?? 1 })),
       }));
       return { orders, connected: true, message: "Connected to ShipStation orders." };
     }
@@ -92,6 +94,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
         quantity: order.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
         status: normalizeStatus(order.order_status), orderDate: order.ordered_at ?? order.created_at ?? new Date().toISOString(), shipDate: order.shipped_at,
         trackingNumber: order.tracking_number, carrier: order.carrier_code?.toUpperCase(),
+        items: order.items?.map(item => ({ name: item.name ?? "Marsh Supply order", quantity: item.quantity ?? 1 })),
       }));
       return { orders, connected: true, message: "Connected to ShipStation orders." };
     }

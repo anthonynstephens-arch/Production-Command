@@ -119,6 +119,21 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     units: orders.reduce((sum, order) => sum + order.quantity, 0),
   }), [orders]);
 
+  const matTotals = useMemo(() => {
+    const totals = { whatupdoe: 0, didYouCall: 0, upsideDown: 0, marshSupply: 0 };
+    for (const order of orders) {
+      const lines = order.items?.length ? order.items : [{ name: order.item, quantity: order.quantity }];
+      for (const line of lines) {
+        const name = line.name.toLowerCase();
+        if (name.includes("did you call")) totals.didYouCall += line.quantity;
+        else if (name.includes("upside down") || name.includes("upside-down")) totals.upsideDown += line.quantity;
+        else if (name.includes("whatupdoe") || name.includes("what up doe")) totals.whatupdoe += line.quantity;
+        else if (name.includes("marsh supply") || name.includes("marsh")) totals.marshSupply += line.quantity;
+      }
+    }
+    return totals;
+  }, [orders]);
+
   const filtered = orders.filter((order) => (filter === "all" || order.status === filter) && `${order.orderNumber} ${order.customer} ${order.item}`.toLowerCase().includes(query.toLowerCase()));
   const committedUnits = orders.filter((order) => order.status === "pending").reduce((sum, order) => sum + order.quantity, 0);
   const availableMats = Math.max(0, supplies.mats - committedUnits);
@@ -160,6 +175,14 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <article className="metric"><span className="metric-icon blue"><Truck size={19}/></span><div><p>Orders shipped</p><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
           <article className="metric"><span className="metric-icon green"><PackageCheck size={19}/></span><div><p>Orders delivered</p><strong>{counts.delivered}</strong><small>Successfully completed</small></div></article>
           <article className="metric"><span className="metric-icon violet"><TrendingUp size={19}/></span><div><p>Total units</p><strong>{counts.units}</strong><small>Across visible orders</small></div></article>
+        </section>
+
+        <div className="dashboard-section-heading product-heading"><div><span>03</span><h2>Mat Sales</h2></div><p>Total units sold by design</p></div>
+        <section className="metrics-grid product-sales-grid">
+          <article className="metric"><span className="metric-icon amber"><RectangleHorizontal size={19}/></span><div><p>Whatupdoe</p><strong>{matTotals.whatupdoe}</strong><small>mats sold</small></div></article>
+          <article className="metric"><span className="metric-icon blue"><RectangleHorizontal size={19}/></span><div><p>Did You Call First?</p><strong>{matTotals.didYouCall}</strong><small>mats sold</small></div></article>
+          <article className="metric"><span className="metric-icon green"><RectangleHorizontal size={19}/></span><div><p>Upside Down Welcome</p><strong>{matTotals.upsideDown}</strong><small>mats sold</small></div></article>
+          <article className="metric"><span className="metric-icon violet"><RectangleHorizontal size={19}/></span><div><p>Marsh Supply</p><strong>{matTotals.marshSupply}</strong><small>mats sold</small></div></article>
         </section>
 
         <section className="insights-row">
