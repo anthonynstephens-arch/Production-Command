@@ -56,9 +56,30 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
   if (!apiKey) return { orders: demoOrders, connected: false, message: "Add the ShipStation API key to activate live syncing." };
 
   try {
+    // Accounts that provide both an API key and secret use ShipStation's
+    // orders API.  It includes awaiting-shipment orders and the customer's
+    // name; the shipments API only returns shipments and therefore makes
+    // every result appear shipped.
+    if (apiSecret) {
+      const legacy = await fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
+        headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!legacy.ok) throw new Error(`ShipStation authentication failed (${legacy.status}).`);
+      const payload = await legacy.json() as { orders?: LegacyShipStationOrder[] };
+      const orders = (payload.orders ?? []).filter(order => order.orderStatus?.toLowerCase() !== "cancelled").map((order, index): PortalOrder => ({
+        id: String(order.orderId ?? `legacy-${index}`), orderNumber: order.orderNumber ?? "Unnumbered", customer: order.customerName?.trim() || "Customer",
+        item: order.items?.map(item => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
+        quantity: order.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
+        status: normalizeStatus(order.orderStatus), orderDate: order.orderDate ?? new Date().toISOString(), shipDate: order.shipDate,
+        trackingNumber: order.trackingNumber, carrier: order.carrierCode?.toUpperCase(),
+      }));
+      return { orders, connected: true, message: "Connected to ShipStation orders." };
+    }
+
     const response = await fetch("https://api.shipstation.com/v2/shipments?page_size=100&sort_dir=desc", {
       headers: { "api-key": apiKey, Accept: "application/json" },
-      next: { revalidate: 300 },
+      cache: "no-store",
     });
     if (response.ok) {
       const payload = await response.json() as { shipments?: ShipStationShipment[] };
@@ -73,21 +94,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
       }));
       return { orders, connected: true };
     }
-    if (!apiSecret) throw new Error(`ShipStation API v2 returned ${response.status}; an API secret is required for legacy credentials.`);
-    const legacy = await fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
-      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" },
-      next: { revalidate: 300 },
-    });
-    if (!legacy.ok) throw new Error(`ShipStation authentication failed (${legacy.status}).`);
-    const payload = await legacy.json() as { orders?: LegacyShipStationOrder[] };
-    const orders = (payload.orders ?? []).filter(order => order.orderStatus !== "cancelled").map((order, index): PortalOrder => ({
-      id: String(order.orderId ?? `legacy-${index}`), orderNumber: order.orderNumber ?? "Unnumbered", customer: order.customerName ?? "Customer",
-      item: order.items?.map(item => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
-      quantity: order.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
-      status: normalizeStatus(order.orderStatus), orderDate: order.orderDate ?? new Date().toISOString(), shipDate: order.shipDate,
-      trackingNumber: order.trackingNumber, carrier: order.carrierCode?.toUpperCase(),
-    }));
-    return { orders, connected: true, message: "Connected with ShipStation API key and secret." };
+    throw new Error(`ShipStation API returned ${response.status}.`);
   } catch (error) {
     return { orders: demoOrders, connected: false, message: error instanceof Error ? error.message : "ShipStation sync unavailable" };
   }
