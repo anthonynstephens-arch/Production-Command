@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
+import type { PortalSession } from "@/lib/auth";
 
 type Supply = { mats: number; boxes: number; ink: number; tape: number; tapeCoverage: number; tapeUsage: number; thankYouCards: number; polyBags: number };
-type Props = { initialOrders: PortalOrder[]; initialConnected: boolean; initialMessage?: string };
+type Props = { initialOrders: PortalOrder[]; initialConnected: boolean; initialMessage?: string; session: PortalSession };
 
 const defaults: Supply = { mats: 250, boxes: 250, ink: 82, tape: 24, tapeCoverage: 25, tapeUsage: 0, thankYouCards: 250, polyBags: 250 };
 
@@ -31,7 +34,8 @@ function StatusBadge({ status }: { status: PortalOrder["status"] }) {
   return <span className={`status ${status}`}><i />{labels[status]}</span>;
 }
 
-export default function Dashboard({ initialOrders, initialConnected, initialMessage }: Props) {
+export default function Dashboard({ initialOrders, initialConnected, initialMessage, session }: Props) {
+  const router = useRouter();
   const [supplies, setSupplies] = useState<Supply>(defaults);
   const [orders, setOrders] = useState(initialOrders);
   const [connected, setConnected] = useState(initialConnected);
@@ -39,7 +43,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [syncing, setSyncing] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | PortalOrder["status"]>("all");
-  const [view, setView] = useState<"admin" | "marsh">("admin");
+  const [view, setView] = useState<"admin" | "marsh">(session.role === "admin" ? "admin" : "marsh");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("marsh-supplies");
@@ -96,6 +100,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     } finally { setSyncing(false); }
   };
 
+  const logout = async () => { await fetch("/api/session/logout", { method: "POST" }); router.push("/login"); router.refresh(); };
+
   const counts = useMemo(() => ({
     pending: orders.filter((order) => order.status === "pending").length,
     shipped: orders.filter((order) => order.status === "shipped").length,
@@ -119,8 +125,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   return (
     <main>
       <header className="topbar">
-        <div className="brand"><div className="brand-mark"><Boxes size={22}/></div><div><strong>PRODUCTION COMMAND</strong><span>Marsh Supply Portal</span></div></div>
-        <div className="header-actions"><div className={`connection ${connected ? "live" : "demo"}`}><i />{connected ? "ShipStation connected" : "ShipStation setup needed"}</div><button className="view-toggle" onClick={() => setView(view === "admin" ? "marsh" : "admin")}><ShieldCheck size={16}/>{view === "admin" ? "Admin view" : "Marsh view"}</button></div>
+        <div className="brand"><Image className="header-logo" src="/marsh-supply-logo.png" alt="Marsh Supply" width={116} height={72} priority/><div><strong>PRODUCTION COMMAND</strong><span>Marsh Supply Portal</span></div></div>
+        <div className="header-actions"><div className={`connection ${connected ? "live" : "demo"}`}><i />{connected ? "ShipStation connected" : "ShipStation setup needed"}</div>{session.role === "admin" && <button className="view-toggle" onClick={() => setView(view === "admin" ? "marsh" : "admin")}><ShieldCheck size={16}/>{view === "admin" ? "Admin view" : "Preview Marsh view"}</button>}<button className="view-toggle" onClick={logout}>{session.name} · Sign out</button></div>
       </header>
 
       <div className="page-shell">
