@@ -14,13 +14,14 @@ function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number })
   return <div className="meter" aria-label={`${value} percent`}><span className={tone} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
-function SupplyCard({ icon, title, value, unit, detail, onDecrease, onIncrease, percent }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; onDecrease: () => void; onIncrease: () => void; percent: number }) {
+function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, admin, onSet }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; admin: boolean; onSet: (value: number) => void }) {
   return (
     <article className="supply-card">
       <div className="card-top"><span className="icon-box">{icon}</span><span className={percent <= 25 ? "stock low" : "stock"}>{percent <= 25 ? "Low stock" : "In stock"}</span></div>
-      <div><p className="eyebrow">{title}</p><div className="supply-value">{value.toLocaleString()} <small>{unit}</small></div></div>
+      <div><p className="eyebrow">{title}</p><div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div></div>
       <Meter value={percent} />
-      <div className="supply-footer"><span>{detail}</span><div className="stepper"><button onClick={onDecrease} aria-label={`Decrease ${title}`}><Minus size={15}/></button><button onClick={onIncrease} aria-label={`Increase ${title}`}><Plus size={15}/></button></div></div>
+      {available !== undefined && <div className="allocation"><div><span>Committed</span><strong>{committed}</strong></div><div><span>Available</span><strong>{available}</strong></div></div>}
+      <div className="supply-footer"><span>{detail}</span>{admin && <label className="manual-adjust"><span>Set count</span><input type="number" min="0" value={value} onChange={(event) => onSet(Number(event.target.value))} /></label>}</div>
     </article>
   );
 }
@@ -45,10 +46,31 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     if (saved) { try { setSupplies(JSON.parse(saved)); } catch {} }
   }, []);
 
-  const updateSupply = (key: keyof Supply, delta: number) => {
+  useEffect(() => {
+    const currentShipped = orders.filter((order) => order.status === "shipped" || order.status === "delivered").map((order) => order.id);
+    const stored = window.localStorage.getItem("marsh-processed-shipments");
+    if (!stored) {
+      window.localStorage.setItem("marsh-processed-shipments", JSON.stringify(currentShipped));
+      return;
+    }
+    let processed: string[] = [];
+    try { processed = JSON.parse(stored); } catch {}
+    const newShipments = orders.filter((order) => (order.status === "shipped" || order.status === "delivered") && !processed.includes(order.id));
+    const unitsToDeduct = newShipments.reduce((sum, order) => sum + order.quantity, 0);
+    if (unitsToDeduct > 0) {
+      setSupplies((current) => {
+        const next = { ...current, mats: Math.max(0, current.mats - unitsToDeduct), boxes: Math.max(0, current.boxes - unitsToDeduct) };
+        window.localStorage.setItem("marsh-supplies", JSON.stringify(next));
+        return next;
+      });
+      window.localStorage.setItem("marsh-processed-shipments", JSON.stringify([...new Set([...processed, ...currentShipped])]));
+    }
+  }, [orders]);
+
+  const setSupply = (key: keyof Supply, value: number) => {
     if (view !== "admin") return;
     setSupplies((current) => {
-      const next = { ...current, [key]: Math.max(0, current[key] + delta) };
+      const next = { ...current, [key]: Math.max(0, Number.isFinite(value) ? value : 0) };
       window.localStorage.setItem("marsh-supplies", JSON.stringify(next));
       return next;
     });
@@ -71,7 +93,10 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   }), [orders]);
 
   const filtered = orders.filter((order) => (filter === "all" || order.status === filter) && `${order.orderNumber} ${order.customer} ${order.item}`.toLowerCase().includes(query.toLowerCase()));
-  const capacity = Math.min(supplies.mats, supplies.boxes);
+  const committedUnits = orders.filter((order) => order.status === "pending").reduce((sum, order) => sum + order.quantity, 0);
+  const availableMats = Math.max(0, supplies.mats - committedUnits);
+  const availableBoxes = Math.max(0, supplies.boxes - committedUnits);
+  const availableCapacity = Math.min(availableMats, availableBoxes);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
 
   return (
@@ -87,9 +112,9 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
         <section className="supply-grid">
-          <SupplyCard icon={<PackageOpen size={21}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail={`${Math.round((supplies.mats / 250) * 100)}% of standard batch`} percent={Math.round((supplies.mats / 250) * 100)} onDecrease={() => updateSupply("mats", -1)} onIncrease={() => updateSupply("mats", 1)} />
-          <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail={`${capacity} complete orders ready`} percent={Math.round((supplies.boxes / 250) * 100)} onDecrease={() => updateSupply("boxes", -1)} onIncrease={() => updateSupply("boxes", 1)} />
-          <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} onDecrease={() => updateSupply("ink", -5)} onIncrease={() => updateSupply("ink", 5)} />
+          <SupplyCard icon={<PackageOpen size={21}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
+          <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
+          <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
         </section>
 
         <section className="metrics-grid">
@@ -100,7 +125,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         </section>
 
         <section className="insights-row">
-          <article className="panel capacity-panel"><div className="panel-heading"><div><p className="eyebrow">PRODUCTION CAPACITY</p><h2>{capacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>Current mats and boxes support up to <strong>{capacity} single-mat shipments</strong> before restocking.</p><div className="capacity-bars"><div><span>Mats</span><b>{supplies.mats}</b><Meter value={Math.min(100, supplies.mats / 2.5)}/></div><div><span>Boxes</span><b>{supplies.boxes}</b><Meter value={Math.min(100, supplies.boxes / 2.5)}/></div><div><span>Ink</span><b>{inkPercent}%</b><Meter value={inkPercent}/></div></div></article>
+          <article className="panel capacity-panel"><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p><div className="capacity-bars"><div><span>Available mats</span><b>{availableMats}</b><Meter value={availableMats > 25 ? 100 : availableMats * 4}/></div><div><span>Available boxes</span><b>{availableBoxes}</b><Meter value={availableBoxes > 25 ? 100 : availableBoxes * 4}/></div><div><span>Ink</span><b>{inkPercent}%</b><Meter value={inkPercent}/></div></div></article>
           <article className="panel cadence-panel"><p className="eyebrow">FULFILLMENT CADENCE</p><h2>Monday · Wednesday · Friday</h2><p>Orders are prepared and processed through ShipStation three days each week.</p><div className="cadence-days"><span className="active">M</span><span>T</span><span className="active">W</span><span>T</span><span className="active">F</span><span>S</span><span>S</span></div><div className="next-run"><Truck size={17}/><span>Next processing run</span><strong>Monday</strong></div></article>
         </section>
 
