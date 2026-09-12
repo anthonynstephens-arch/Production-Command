@@ -21,6 +21,9 @@ function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number })
 }
 
 function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, incoming = 0, admin, onSet, extraControl, verticalMeter = false, low }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; incoming?: number; admin: boolean; onSet: (value: number) => void; extraControl?: React.ReactNode; verticalMeter?: boolean; low?: boolean }) {
+  const [draft, setDraft] = useState(String(value));
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setDraft(String(value)); }, [value]);
   return (
     <article className={`supply-card${(low ?? percent <= 25) ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
       <div className="card-top"><div className="card-title-line"><span className="icon-box">{icon}</span><h3>{title}</h3></div></div>
@@ -28,7 +31,7 @@ function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, 
       {verticalMeter ? <div className="ink-level-wrap"><div className="ink-level" aria-label={`${percent} percent ink`}><span style={{ height: `${percent}%` }} /></div><strong>{percent}%</strong></div> : <Meter value={percent} />}
       {incoming > 0 && <div className="incoming-supply"><span>Incoming</span><strong>+{incoming.toLocaleString()}</strong></div>}
       {available !== undefined && <div className="allocation"><div><span>Committed</span><strong>{committed}</strong></div><div><span>Available</span><strong>{available}</strong></div></div>}
-      <div className="supply-footer"><span>{detail}</span><div className="control-stack">{admin && <label className="manual-adjust"><span>Set count</span><input type="number" min="0" value={value} onChange={(event) => onSet(Number(event.target.value))} /></label>}{admin && extraControl}</div></div>
+      <div className="supply-footer"><span>{detail}</span>{admin && <details className="stock-editor"><summary>Adjust stock</summary><form onSubmit={(event) => { event.preventDefault(); if (draft.trim() && Number.isFinite(Number(draft)) && Number(draft) >= 0) { onSet(Number(draft)); setSaved(true); } }}><label className="manual-adjust"><span>New {verticalMeter ? "ink level (%)" : "on-hand count"}</span><input aria-label={`New ${title} count`} type="number" min="0" max={verticalMeter ? 100 : undefined} step="any" required value={draft} onChange={(event) => { setDraft(event.target.value); setSaved(false); }} /></label><button type="submit">Save</button></form>{extraControl}<span className="save-feedback" role="status">{saved ? "Count saved on this device." : ""}</span></details>}</div>
     </article>
   );
 }
@@ -49,6 +52,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [connected, setConnected] = useState(initialConnected);
   const [syncMessage, setSyncMessage] = useState(initialMessage);
   const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | PortalOrder["status"]>("all");
   const [view, setView] = useState<"admin" | "marsh">(session.role === "admin" ? "admin" : "marsh");
@@ -107,10 +112,17 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
   const sync = async () => {
     setSyncing(true);
+    setSyncError("");
     try {
       const response = await fetch("/api/shipstation", { cache: "no-store" });
       const data = await response.json();
-      setOrders(data.orders ?? []); setConnected(Boolean(data.connected)); setSyncMessage(data.message);
+      if (!response.ok || !data.connected || !Array.isArray(data.orders)) {
+        throw new Error(data.error || data.message || "Could not refresh orders. Please try again.");
+      }
+      setOrders(data.orders); setConnected(true); setSyncMessage(data.message);
+      setLastSync(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Could not refresh orders. Please try again.");
     } finally { setSyncing(false); }
   };
 
@@ -168,18 +180,20 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   ].filter((supply) => supply.available <= 0);
 
   return (
-    <main>
+    <main className="dashboard">
       <header className="topbar">
         <div className="brand"><Image className="header-logo" src="/marsh-supply-logo-web.png" alt="Marsh Supply" width={116} height={72} priority unoptimized/><div><strong>PRODUCTION COMMAND</strong><span>Marsh Supply Portal</span></div></div>
         <div className="header-actions"><div className={`connection ${connected ? "live" : "demo"}`}><i />{connected ? "ShipStation connected" : "ShipStation setup needed"}</div>{session.role === "admin" && <button className="view-toggle" onClick={() => setView(view === "admin" ? "marsh" : "admin")}><ShieldCheck size={16}/>{view === "admin" ? "Admin view" : "Preview Marsh view"}</button>}<button className="view-toggle" onClick={logout}>{session.name} · Sign out</button></div>
       </header>
 
       <div className="page-shell">
+        <nav className="dashboard-nav" aria-label="Dashboard sections"><a href="#inventory">Inventory</a><a href="#pipeline">Orders & capacity</a><a href="#mat-sales">Mat sales</a><a href="#operations">Payments & deliveries</a><a href="#order-queue">Fulfillment queue</a></nav>
         <section className="page-heading"><div><p className="kicker">FULFILLMENT OVERVIEW</p><h1>Marsh Supply Command Center</h1><p>Inventory and order movement across the Whatupdoe mat program.</p></div><button className="sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button></section>
 
+        <div className="sync-feedback" role="status" aria-live="polite">{syncing ? "Checking ShipStation for updates…" : syncError ? <span className="sync-error">{syncError} Displayed orders have not been replaced.</span> : lastSync ? `Orders refreshed at ${lastSync}.` : connected ? "ShipStation orders loaded with this page." : "Demo data · live orders unavailable"}</div>
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
-        <div className="dashboard-section-heading"><div><span>01</span><h2>Inventory &amp; Supplies</h2>{inventoryWarning && <strong className="inventory-warning"><AlertTriangle size={17}/>Inventory needs to be purchased</strong>}</div><p>On-hand, committed, and available materials</p></div>
+        <div className="dashboard-section-heading" id="inventory"><div><span>01</span><h2>Inventory &amp; Supplies</h2>{inventoryWarning && <strong className="inventory-warning"><AlertTriangle size={17}/>Inventory needs to be purchased</strong>}</div><p>On hand · committed · available</p></div>
         <section className="supply-grid">
           <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} incoming={incoming.mats} low={availableMats <= 0} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} incoming={incoming.boxes} low={availableBoxes <= 0} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
@@ -189,7 +203,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} incoming={incoming.ink} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
         </section>
 
-        <div className="dashboard-section-heading pipeline-heading"><div><span>02</span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
+        <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span>02</span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
         <section className="metrics-grid">
           <article className="metric"><span className="metric-icon amber"><PackageOpen size={19}/></span><div><p>Orders pending</p><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
           <article className="metric"><span className="metric-icon blue"><Truck size={19}/></span><div><p>Orders shipped</p><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
@@ -199,21 +213,22 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
         <article className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p>{capacityBlockers.length > 0 ? <div className="capacity-blockers"><strong>Fulfillment is blocked by:</strong><ul>{capacityBlockers.map((supply) => <li key={supply.label}><AlertTriangle size={20}/><span><b>{supply.available}</b> {supply.label} available</span></li>)}</ul></div> : <div className="capacity-clear"><PackageCheck size={21}/><strong>All required supplies are available.</strong></div>}</article>
 
-        <div className="dashboard-section-heading product-heading"><div><span>03</span><h2>Mat Sales</h2></div><p>Total units sold by design</p></div>
+        <div className="dashboard-section-heading product-heading" id="mat-sales"><div><span>03</span><h2>Mat Sales</h2></div><p>Design totals from loaded orders</p></div>
         <section className="panel mat-sales-chart" aria-label="Mat sales by design">
           <div className="chart-heading"><div><p className="eyebrow">DESIGN COMPARISON</p><h2>Units sold</h2></div><strong>{matSalesTotal}<small> total mats</small></strong></div>
-          <div className="bar-chart">{matSales.map((design) => <div className="bar-row" key={design.label}><div className="bar-label"><span>{design.label}</span><strong>{design.value}</strong></div><div className="bar-track"><span className={design.tone} style={{ width: design.value === 0 ? 0 : `${Math.max(6, (design.value / largestMatTotal) * 100)}%` }} /></div></div>)}</div>
+          <div className="bar-chart">{matSales.map((design) => <div className="bar-row" key={design.label}><div className="bar-label"><span>{design.label}</span><strong>{design.value.toLocaleString()}</strong></div><div className="bar-track" aria-hidden="true"><span className={design.tone} style={{ width: `${(design.value / largestMatTotal) * 100}%` }} /></div></div>)}</div>
+          {matSalesTotal === 0 && <p className="chart-empty">No matching mat sales in the loaded orders yet.</p>}
         </section>
 
         <section className="insights-row cadence-only">
           <article className="panel cadence-panel"><p className="eyebrow">FULFILLMENT CADENCE</p><h2>Monday · Wednesday · Friday</h2><p>Orders are prepared and processed through ShipStation three days each week.</p><div className="cadence-days"><span className="active">M</span><span>T</span><span className="active">W</span><span>T</span><span className="active">F</span><span>S</span><span>S</span></div><div className="next-run"><Truck size={17}/><span>Next processing run</span><strong>Monday</strong></div></article>
         </section>
 
-        <FinancialLogistics session={session} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply}/>
+        <div id="operations"><FinancialLogistics session={session} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply}/></div>
 
-        <section className="panel orders-panel"><div className="orders-head"><div><p className="eyebrow">ORDER ACTIVITY</p><h2>Fulfillment queue</h2></div><div className="table-actions"><label className="search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search orders" /></label><select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option></select></div></div>
+        <section className="panel orders-panel" id="order-queue"><div className="orders-head"><div><p className="eyebrow">ORDER ACTIVITY</p><h2>Fulfillment queue</h2></div><div className="table-actions"><label className="search"><Search size={16}/><input aria-label="Search fulfillment orders" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search orders" /></label><select aria-label="Filter by order status" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option></select></div></div>
           <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></td><td>{order.customer}</td><td className="product-cell">{order.item}</td><td>{order.quantity}</td><td><StatusBadge status={order.status}/></td><td>{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
-          <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>Last sync: just now</span></footer>
+          <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>{lastSync ? `Last successful refresh: ${lastSync}` : "Loaded with page"}</span></footer>
         </section>
         {session.role === "admin" && view === "admin" && <AccessManager/>}
       </div>
