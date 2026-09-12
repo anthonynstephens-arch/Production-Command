@@ -11,15 +11,16 @@ export type PortalOrder = {
   carrier?: string;
 };
 
-type ShipStationShipment = {
-  shipment_id?: string;
-  external_shipment_id?: string;
+type ShipStationOrder = {
+  order_id?: string;
   order_number?: string;
+  order_status?: string;
   ship_to?: { name?: string };
+  bill_to?: { name?: string };
   items?: Array<{ name?: string; quantity?: number }>;
-  shipment_status?: string;
   created_at?: string;
-  ship_date?: string;
+  ordered_at?: string;
+  shipped_at?: string;
   tracking_number?: string;
   carrier_code?: string;
 };
@@ -77,22 +78,22 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
       return { orders, connected: true, message: "Connected to ShipStation orders." };
     }
 
-    const response = await fetch("https://api.shipstation.com/v2/shipments?page_size=100&sort_dir=desc", {
+    const response = await fetch("https://api.shipstation.com/v2/orders?page_size=100&sort_dir=desc", {
       headers: { "api-key": apiKey, Accept: "application/json" },
       cache: "no-store",
     });
     if (response.ok) {
-      const payload = await response.json() as { shipments?: ShipStationShipment[] };
-      const orders = (payload.shipments ?? []).map((shipment, index): PortalOrder => ({
-        id: shipment.shipment_id ?? shipment.external_shipment_id ?? `shipment-${index}`,
-        orderNumber: shipment.order_number ?? "Unnumbered",
-        customer: shipment.ship_to?.name ?? "Customer",
-        item: shipment.items?.map((item) => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
-        quantity: shipment.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
-        status: normalizeStatus(shipment.shipment_status), orderDate: shipment.created_at ?? new Date().toISOString(), shipDate: shipment.ship_date,
-        trackingNumber: shipment.tracking_number, carrier: shipment.carrier_code?.toUpperCase(),
+      const payload = await response.json() as { orders?: ShipStationOrder[] };
+      const orders = (payload.orders ?? []).filter(order => order.order_status?.toLowerCase() !== "cancelled").map((order, index): PortalOrder => ({
+        id: order.order_id ?? `order-${index}`,
+        orderNumber: order.order_number ?? "Unnumbered",
+        customer: order.ship_to?.name?.trim() || order.bill_to?.name?.trim() || "Customer name unavailable",
+        item: order.items?.map((item) => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
+        quantity: order.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
+        status: normalizeStatus(order.order_status), orderDate: order.ordered_at ?? order.created_at ?? new Date().toISOString(), shipDate: order.shipped_at,
+        trackingNumber: order.tracking_number, carrier: order.carrier_code?.toUpperCase(),
       }));
-      return { orders, connected: true };
+      return { orders, connected: true, message: "Connected to ShipStation orders." };
     }
     throw new Error(`ShipStation API returned ${response.status}.`);
   } catch (error) {
