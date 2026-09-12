@@ -20,9 +20,11 @@ function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number })
   return <div className="meter" aria-label={`${value} percent`}><span className={tone} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
-function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, incoming = 0, admin, onSet, extraControl, verticalMeter = false, low }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; incoming?: number; admin: boolean; onSet: (value: number) => void; extraControl?: React.ReactNode; verticalMeter?: boolean; low?: boolean }) {
+function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, incoming = 0, admin, onSet, extraControl, verticalMeter = false, low }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; incoming?: number; admin: boolean; onSet: (value: number) => Promise<void>; extraControl?: React.ReactNode; verticalMeter?: boolean; low?: boolean }) {
   const [draft, setDraft] = useState(String(value));
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   useEffect(() => { setDraft(String(value)); }, [value]);
   return (
     <article className={`supply-card${(low ?? percent <= 25) ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
@@ -31,7 +33,7 @@ function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, 
       {verticalMeter ? <div className="ink-level-wrap"><div className="ink-level" aria-label={`${percent} percent ink`}><span style={{ height: `${percent}%` }} /></div><strong>{percent}%</strong></div> : <Meter value={percent} />}
       {incoming > 0 && <div className="incoming-supply"><span>Incoming</span><strong>+{incoming.toLocaleString()}</strong></div>}
       {available !== undefined && <div className="allocation"><div><span>Committed</span><strong>{committed}</strong></div><div><span>Available</span><strong>{available}</strong></div></div>}
-      <div className="supply-footer"><span>{detail}</span>{admin && <details className="stock-editor"><summary>Adjust stock</summary><form onSubmit={(event) => { event.preventDefault(); if (draft.trim() && Number.isFinite(Number(draft)) && Number(draft) >= 0) { onSet(Number(draft)); setSaved(true); } }}><label className="manual-adjust"><span>New {verticalMeter ? "ink level (%)" : "on-hand count"}</span><input aria-label={`New ${title} count`} type="number" min="0" max={verticalMeter ? 100 : undefined} step="any" required value={draft} onChange={(event) => { setDraft(event.target.value); setSaved(false); }} /></label><button type="submit">Save</button></form>{extraControl}<span className="save-feedback" role="status">{saved ? "Count saved on this device." : ""}</span></details>}</div>
+      <div className="supply-footer"><span>{detail}</span>{admin && <details className="stock-editor"><summary>Adjust stock</summary><form onSubmit={async (event) => { event.preventDefault(); if (draft.trim() && Number.isFinite(Number(draft)) && Number(draft) >= 0) { setSaving(true); setSaveError(""); try { await onSet(Number(draft)); setSaved(true); } catch (error) { setSaveError(error instanceof Error ? error.message : "Could not save inventory."); } finally { setSaving(false); } } }}><label className="manual-adjust"><span>New {verticalMeter ? "ink level (%)" : "on-hand count"}</span><input aria-label={`New ${title} count`} type="number" min="0" max={verticalMeter ? 100 : undefined} step="any" required value={draft} onChange={(event) => { setDraft(event.target.value); setSaved(false); setSaveError(""); }} /></label><button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</button></form>{extraControl}<span className="save-feedback" role="status">{saveError || (saved ? "Saved for everyone." : "")}</span></details>}</div>
     </article>
   );
 }
@@ -59,9 +61,19 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [view, setView] = useState<"admin" | "marsh">(session.role === "admin" ? "admin" : "marsh");
   const [incoming, setIncoming] = useState<Partial<Record<SupplyKey, number>>>({});
 
+  const loadInventory = async () => {
+    const response = await fetch("/api/inventory", { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load inventory.");
+    setSupplies((current) => ({ ...current, ...data.inventory }));
+  };
+
   useEffect(() => {
-    const saved = window.localStorage.getItem("marsh-supplies");
-    if (saved) { try { setSupplies({ ...defaults, ...JSON.parse(saved) }); } catch {} }
+    loadInventory().catch(() => {});
+    const refresh = () => loadInventory().catch(() => {});
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, []);
 
   useEffect(() => {
@@ -96,19 +108,17 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     }
   }, [orders]);
 
-  const setSupply = (key: keyof Supply, value: number) => {
-    if (view !== "admin") return;
-    setSupplies((current) => {
-      const next = { ...current, [key]: Math.max(0, Number.isFinite(value) ? value : 0) };
-      window.localStorage.setItem("marsh-supplies", JSON.stringify(next));
-      return next;
-    });
+  const setSupply = async (key: keyof Supply, value: number) => {
+    if (view !== "admin") throw new Error("Admin access required.");
+    const response = await fetch("/api/inventory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, value }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not save inventory.");
+    setSupplies((current) => ({ ...current, [key]: data.value }));
   };
-  const receiveSupply = (key: SupplyKey, quantity: number) => setSupplies((current) => {
-    const next = { ...current, [key]: key === "ink" ? Math.min(100, current[key] + quantity) : current[key] + quantity };
-    window.localStorage.setItem("marsh-supplies", JSON.stringify(next));
-    return next;
-  });
+  const receiveSupply = async (key: SupplyKey, quantity: number) => {
+    const nextValue = key === "ink" ? Math.min(100, supplies[key] + quantity) : supplies[key] + quantity;
+    await setSupply(key, nextValue);
+  };
 
   const sync = async () => {
     setSyncing(true);
