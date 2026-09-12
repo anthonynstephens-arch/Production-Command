@@ -3,7 +3,13 @@ import { setPortalSession, verifyPin } from "@/lib/auth";
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const supabase = getSupabaseAdmin();
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch (error) {
+    console.error("Marsh portal sign-in configuration error", error);
+    return Response.json({ error: "Portal sign-in has not been connected yet. Ask the administrator to finish the deployment setup." }, { status: 503 });
+  }
   const { data: attempt } = await supabase.from("marsh_pin_attempts").select("failed_count,blocked_until").eq("ip_address", ip).maybeSingle();
   if (attempt?.blocked_until && new Date(attempt.blocked_until).getTime() > Date.now()) return Response.json({ error: "Too many incorrect attempts. Try again in 15 minutes." }, { status: 429 });
   const body = await request.json().catch(() => ({}));
@@ -28,6 +34,11 @@ export async function POST(request: Request) {
     supabase.from("marsh_portal_users").update({ last_login: new Date().toISOString(), login_count: user.login_count + 1 }).eq("id", user.id),
     supabase.from("marsh_login_events").insert({ user_id: user.id, ip_address: ip }),
   ]);
-  await setPortalSession({ userId: user.id, name: user.display_name, role: user.role, mustChangePin: user.must_change_pin });
+  try {
+    await setPortalSession({ userId: user.id, name: user.display_name, role: user.role, mustChangePin: user.must_change_pin });
+  } catch (error) {
+    console.error("Marsh portal session configuration error", error);
+    return Response.json({ error: "Portal sign-in has not been connected yet. Ask the administrator to finish the deployment setup." }, { status: 503 });
+  }
   return Response.json({ ok: true, mustChangePin: user.must_change_pin });
 }

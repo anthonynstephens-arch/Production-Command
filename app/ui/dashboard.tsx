@@ -126,7 +126,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   return (
     <main>
       <header className="topbar">
-        <div className="brand"><Image className="header-logo" src="/marsh-supply-logo.png" alt="Marsh Supply" width={116} height={72} priority/><div><strong>PRODUCTION COMMAND</strong><span>Marsh Supply Portal</span></div></div>
+        <div className="brand"><Image className="header-logo" src="/marsh-supply-logo-web.png" alt="Marsh Supply" width={116} height={72} priority unoptimized/><div><strong>PRODUCTION COMMAND</strong><span>Marsh Supply Portal</span></div></div>
         <div className="header-actions"><div className={`connection ${connected ? "live" : "demo"}`}><i />{connected ? "ShipStation connected" : "ShipStation setup needed"}</div>{session.role === "admin" && <button className="view-toggle" onClick={() => setView(view === "admin" ? "marsh" : "admin")}><ShieldCheck size={16}/>{view === "admin" ? "Admin view" : "Preview Marsh view"}</button>}<button className="view-toggle" onClick={logout}>{session.name} · Sign out</button></div>
       </header>
 
