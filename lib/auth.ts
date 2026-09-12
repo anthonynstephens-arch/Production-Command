@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 
 export type PortalRole = "admin" | "partner";
@@ -6,9 +6,18 @@ export type PortalSession = { userId: string; name: string; role: PortalRole; mu
 const COOKIE_NAME = "production_command_session";
 
 function secret() {
-  const value = process.env.SESSION_SECRET;
-  if (!value || value.length < 32) throw new Error("SESSION_SECRET must contain at least 32 characters.");
-  return value;
+  const configured = process.env.SESSION_SECRET;
+  if (configured && configured.length >= 32) return configured;
+
+  const serverSecret = process.env.SUPABASE_SECRET_KEY;
+  if (!serverSecret) throw new Error("A server secret is required to sign portal sessions.");
+
+  // Domain-separate the session key from the database credential. This keeps
+  // deployments working when Vercel has the Supabase secret but no separate
+  // SESSION_SECRET yet.
+  return createHash("sha256")
+    .update(`production-command-session:${serverSecret}`)
+    .digest("hex");
 }
 
 function signature(payload: string) {
