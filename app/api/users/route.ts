@@ -18,3 +18,13 @@ export async function POST(request: Request) {
   const { error } = await getSupabaseAdmin().from("marsh_portal_users").insert({ display_name: body.name.trim(), email: typeof body.email === "string" && body.email.includes("@") ? body.email.trim().toLowerCase() : null, role: body.role, pin_salt: salt, pin_hash: hash, password_salt:password?.salt ?? null, password_hash:password?.hash ?? null, must_change_pin:true });
   return error ? Response.json({ error: error.code === "23505" ? "That PIN is already assigned." : error.message }, { status: 400 }) : Response.json({ ok: true }, { status: 201 });
 }
+
+export async function PATCH(request: Request) {
+  const session = await getPortalSession();
+  if (session?.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+  const body = await request.json().catch(() => ({}));
+  if (typeof body.userId !== "string" || typeof body.email !== "string" || !body.email.includes("@") || typeof body.password !== "string" || body.password.length < 8) return Response.json({ error: "Enter a valid email and a temporary password of at least 8 characters." }, { status: 400 });
+  const password = hashPin(body.password);
+  const { error } = await getSupabaseAdmin().from("marsh_portal_users").update({ email:body.email.trim().toLowerCase(), password_salt:password.salt, password_hash:password.hash }).eq("id",body.userId);
+  return error ? Response.json({ error:error.code === "23505" ? "That email is already assigned." : error.message }, { status:400 }) : Response.json({ ok:true });
+}
