@@ -135,6 +135,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
+        <div className="dashboard-section-heading"><div><span>01</span><h2>Inventory &amp; Supplies</h2></div><p>On-hand, committed, and available materials</p></div>
         <section className="supply-grid">
           <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
@@ -144,6 +145,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
         </section>
 
+        <div className="dashboard-section-heading pipeline-heading"><div><span>02</span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
         <section className="metrics-grid">
           <article className="metric"><span className="metric-icon amber"><PackageOpen size={19}/></span><div><p>Orders pending</p><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
           <article className="metric"><span className="metric-icon blue"><Truck size={19}/></span><div><p>Orders shipped</p><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
