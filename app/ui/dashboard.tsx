@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, Minus, Plus, ExternalLink } from "lucide-react";
+import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 
-type Supply = { mats: number; boxes: number; ink: number };
+type Supply = { mats: number; boxes: number; ink: number; tape: number; thankYouCards: number; polyBags: number };
 type Props = { initialOrders: PortalOrder[]; initialConnected: boolean; initialMessage?: string };
 
-const defaults: Supply = { mats: 250, boxes: 250, ink: 82 };
+const defaults: Supply = { mats: 250, boxes: 250, ink: 82, tape: 24, thankYouCards: 250, polyBags: 250 };
 
 function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number }) {
   const tone = value <= warningAt ? "danger" : value <= 50 ? "warning" : "healthy";
@@ -43,7 +43,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
   useEffect(() => {
     const saved = window.localStorage.getItem("marsh-supplies");
-    if (saved) { try { setSupplies(JSON.parse(saved)); } catch {} }
+    if (saved) { try { setSupplies({ ...defaults, ...JSON.parse(saved) }); } catch {} }
   }, []);
 
   useEffect(() => {
@@ -59,7 +59,14 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     const unitsToDeduct = newShipments.reduce((sum, order) => sum + order.quantity, 0);
     if (unitsToDeduct > 0) {
       setSupplies((current) => {
-        const next = { ...current, mats: Math.max(0, current.mats - unitsToDeduct), boxes: Math.max(0, current.boxes - unitsToDeduct) };
+        const next = {
+          ...current,
+          mats: Math.max(0, current.mats - unitsToDeduct),
+          boxes: Math.max(0, current.boxes - unitsToDeduct),
+          tape: Math.max(0, current.tape - unitsToDeduct),
+          thankYouCards: Math.max(0, current.thankYouCards - unitsToDeduct),
+          polyBags: Math.max(0, current.polyBags - unitsToDeduct),
+        };
         window.localStorage.setItem("marsh-supplies", JSON.stringify(next));
         return next;
       });
@@ -96,7 +103,10 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const committedUnits = orders.filter((order) => order.status === "pending").reduce((sum, order) => sum + order.quantity, 0);
   const availableMats = Math.max(0, supplies.mats - committedUnits);
   const availableBoxes = Math.max(0, supplies.boxes - committedUnits);
-  const availableCapacity = Math.min(availableMats, availableBoxes);
+  const availableTape = Math.max(0, supplies.tape - committedUnits);
+  const availableThankYouCards = Math.max(0, supplies.thankYouCards - committedUnits);
+  const availablePolyBags = Math.max(0, supplies.polyBags - committedUnits);
+  const availableCapacity = Math.min(availableMats, availableBoxes, availableTape, availableThankYouCards, availablePolyBags);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
 
   return (
@@ -115,6 +125,9 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <SupplyCard icon={<PackageOpen size={21}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
+          <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail="One reserved per pending mat" percent={supplies.tape > 25 ? 100 : supplies.tape * 4} committed={committedUnits} available={availableTape} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} />
+          <SupplyCard icon={<Mail size={21}/>} title="Thank-you cards" value={supplies.thankYouCards} unit="cards" detail="One reserved per pending mat" percent={supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4} committed={committedUnits} available={availableThankYouCards} admin={view === "admin"} onSet={(value) => setSupply("thankYouCards", value)} />
+          <SupplyCard icon={<ShoppingBag size={21}/>} title="Poly bags" value={supplies.polyBags} unit="bags" detail="One reserved per pending mat" percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4} committed={committedUnits} available={availablePolyBags} admin={view === "admin"} onSet={(value) => setSupply("polyBags", value)} />
         </section>
 
         <section className="metrics-grid">
