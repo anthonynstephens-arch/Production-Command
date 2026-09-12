@@ -33,15 +33,16 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   }
   if (body.type === "delivery") {
-    if (!String(body.description || "").trim() || !String(body.trackingNumber || "").trim()) return Response.json({ error: "Item and tracking number are required." }, { status: 400 });
+    if (!String(body.trackingNumber || "").trim()) return Response.json({ error: "Tracking number is required." }, { status: 400 });
     const supplyTypes=["mats","boxes","tape","thankYouCards","polyBags","ink"];
     const supplyType=supplyTypes.includes(body.supplyType)?body.supplyType:"";
     const quantity=Number(body.quantity);
     if(!supplyType||!Number.isFinite(quantity)||quantity<=0) return Response.json({error:"Choose a supply type and enter a valid quantity."},{status:400});
+    const supplyLabels:Record<string,string>={mats:"Blank coir mats",boxes:"Shipping boxes",tape:"Packing tape rolls",thankYouCards:"Thank-you cards",polyBags:"Poly bags",ink:"Black ink"};
     const trackingNumber=String(body.trackingNumber).trim().slice(0,120);
     const tracking=await lookupInboundTracking(trackingNumber,String(body.carrier||"Other"));
     const { error } = await db.from("marsh_incoming_deliveries").insert({
-      description: String(body.description).trim().slice(0, 200), supplier:String(body.supplier||"").trim().slice(0,120)||null, supply_type:supplyType, quantity,
+      description:supplyLabels[supplyType], supplier:null, supply_type:supplyType, quantity,
       carrier:tracking.carrier, tracking_number:trackingNumber, tracking_url:tracking.trackingUrl||null, tracking_provider:tracking.slug,
       eta_start:tracking.etaStart, eta_end:tracking.etaEnd, status:tracking.status, tracking_message:tracking.message, last_tracking_check:new Date().toISOString(),
       submitted_by: session.userId, submitted_by_name: session.name,
