@@ -151,6 +151,13 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const availableCapacity = Math.min(availableMats, availableBoxes, availableTapeMatCapacity, availableThankYouCards, availablePolyBags);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
   const inventoryWarning = availableCapacity <= 0;
+  const capacityBlockers = [
+    { label: "blank coir mats", available: availableMats },
+    { label: "shipping boxes", available: availableBoxes },
+    { label: "mat uses of packing tape", available: availableTapeMatCapacity },
+    { label: "thank-you cards", available: availableThankYouCards },
+    { label: "poly bags", available: availablePolyBags },
+  ].filter((supply) => supply.available <= 0);
 
   return (
     <main>
@@ -191,7 +198,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         </section>
 
         <section className="insights-row">
-          <article className="panel capacity-panel"><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p><div className="capacity-bars"><div><span>Available mats</span><b>{availableMats}</b><Meter value={availableMats > 25 ? 100 : availableMats * 4}/></div><div><span>Available boxes</span><b>{availableBoxes}</b><Meter value={availableBoxes > 25 ? 100 : availableBoxes * 4}/></div><div><span>Thank-you cards</span><b>{availableThankYouCards}</b><Meter value={availableThankYouCards > 25 ? 100 : availableThankYouCards * 4}/></div><div><span>Poly bags</span><b>{availablePolyBags}</b><Meter value={availablePolyBags > 25 ? 100 : availablePolyBags * 4}/></div><div><span>Ink</span><b>{inkPercent}%</b><Meter value={inkPercent}/></div></div></article>
+          <article className={`panel capacity-panel${capacityBlockers.length ? " blocked" : ""}`}><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p>{capacityBlockers.length > 0 ? <div className="capacity-blockers"><strong>Fulfillment is blocked by:</strong><ul>{capacityBlockers.map((supply) => <li key={supply.label}><AlertTriangle size={20}/><span><b>{supply.available}</b> {supply.label} available</span></li>)}</ul></div> : <div className="capacity-clear"><PackageCheck size={21}/><strong>All required supplies are available.</strong></div>}</article>
           <article className="panel cadence-panel"><p className="eyebrow">FULFILLMENT CADENCE</p><h2>Monday · Wednesday · Friday</h2><p>Orders are prepared and processed through ShipStation three days each week.</p><div className="cadence-days"><span className="active">M</span><span>T</span><span className="active">W</span><span>T</span><span className="active">F</span><span>S</span><span>S</span></div><div className="next-run"><Truck size={17}/><span>Next processing run</span><strong>Monday</strong></div></article>
         </section>
 
