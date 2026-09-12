@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal } from "lucide-react";
+import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
@@ -60,6 +60,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [filter, setFilter] = useState<"all" | PortalOrder["status"]>("all");
   const [view, setView] = useState<"admin" | "marsh">(session.role === "admin" ? "admin" : "marsh");
   const [incoming, setIncoming] = useState<Partial<Record<SupplyKey, number>>>({});
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const loadInventory = async () => {
     const response = await fetch("/api/inventory", { cache: "no-store" });
@@ -192,13 +193,29 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   return (
     <main className="dashboard">
       <header className="topbar">
+        <button className="mobile-menu-button" type="button" aria-label={mobileMenuOpen ? "Close menu" : "Open menu"} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X size={23}/> : <Menu size={23}/>}</button>
         <div className="brand"><Image className="header-logo" src="/marsh-supply-logo-web.png" alt="Marsh Supply" width={116} height={72} priority unoptimized/><div><strong>PRODUCTION COMMAND</strong><span>Marsh Supply Portal</span></div></div>
         <div className="header-actions"><div className={`connection ${connected ? "live" : "demo"}`}><i />{connected ? "ShipStation connected" : "ShipStation setup needed"}</div>{session.role === "admin" && <button className="view-toggle" onClick={() => setView(view === "admin" ? "marsh" : "admin")}><ShieldCheck size={16}/>{view === "admin" ? "Admin view" : "Preview Marsh view"}</button>}<button className="view-toggle" onClick={logout}>{session.name} · Sign out</button></div>
+        {mobileMenuOpen && <div className="mobile-menu">
+          <div className={`mobile-menu-connection ${connected ? "live" : "demo"}`}><i />{connected ? "ShipStation connected" : "ShipStation setup needed"}</div>
+          <nav aria-label="Mobile dashboard sections">
+            <a href="#inventory" onClick={() => setMobileMenuOpen(false)}>Inventory</a>
+            <a href="#pipeline" onClick={() => setMobileMenuOpen(false)}>Orders &amp; capacity</a>
+            <a href="#mat-sales" onClick={() => setMobileMenuOpen(false)}>Mat sales</a>
+            <a href="#operations" onClick={() => setMobileMenuOpen(false)}>Payments &amp; deliveries</a>
+            <a href="#order-queue" onClick={() => setMobileMenuOpen(false)}>Fulfillment queue</a>
+          </nav>
+          <div className="mobile-menu-actions">
+            {session.role === "admin" && <button type="button" onClick={() => { setView(view === "admin" ? "marsh" : "admin"); setMobileMenuOpen(false); }}><ShieldCheck size={17}/>{view === "admin" ? "Switch to Marsh view" : "Return to Admin view"}</button>}
+            {session.role === "admin" && <button type="button" onClick={() => { setMobileMenuOpen(false); sync(); }} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}
+            <button type="button" onClick={logout}>{session.name} · Sign out</button>
+          </div>
+        </div>}
       </header>
 
       <div className="page-shell">
         <nav className="dashboard-nav" aria-label="Dashboard sections"><a href="#inventory">Inventory</a><a href="#pipeline">Orders & capacity</a><a href="#mat-sales">Mat sales</a><a href="#operations">Payments & deliveries</a><a href="#order-queue">Fulfillment queue</a></nav>
-        <section className="page-heading"><div><p className="kicker">FULFILLMENT OVERVIEW</p><h1>Marsh Supply Command Center</h1><p>Inventory and order movement across the Whatupdoe mat program.</p></div><button className="sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button></section>
+        <section className="page-heading"><div><p className="kicker">FULFILLMENT OVERVIEW</p><h1>Marsh Supply Command Center</h1><p>Inventory and order movement across the Whatupdoe mat program.</p></div>{session.role === "admin" && <button className="sync-button page-sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}</section>
 
         <div className="sync-feedback" role="status" aria-live="polite">{syncing ? "Checking ShipStation for updates…" : syncError ? <span className="sync-error">{syncError} Displayed orders have not been replaced.</span> : lastSync ? `Orders refreshed at ${lastSync}.` : connected ? "ShipStation orders loaded with this page." : "Demo data · live orders unavailable"}</div>
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
