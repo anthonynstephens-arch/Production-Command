@@ -197,14 +197,15 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <article className="metric"><span className="metric-icon violet"><TrendingUp size={19}/></span><div><p>Total units</p><strong>{counts.units}</strong><small>Across visible orders</small></div></article>
         </section>
 
+        <article className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p>{capacityBlockers.length > 0 ? <div className="capacity-blockers"><strong>Fulfillment is blocked by:</strong><ul>{capacityBlockers.map((supply) => <li key={supply.label}><AlertTriangle size={20}/><span><b>{supply.available}</b> {supply.label} available</span></li>)}</ul></div> : <div className="capacity-clear"><PackageCheck size={21}/><strong>All required supplies are available.</strong></div>}</article>
+
         <div className="dashboard-section-heading product-heading"><div><span>03</span><h2>Mat Sales</h2></div><p>Total units sold by design</p></div>
         <section className="panel mat-sales-chart" aria-label="Mat sales by design">
           <div className="chart-heading"><div><p className="eyebrow">DESIGN COMPARISON</p><h2>Units sold</h2></div><strong>{matSalesTotal}<small> total mats</small></strong></div>
           <div className="bar-chart">{matSales.map((design) => <div className="bar-row" key={design.label}><div className="bar-label"><span>{design.label}</span><strong>{design.value}</strong></div><div className="bar-track"><span className={design.tone} style={{ width: design.value === 0 ? 0 : `${Math.max(6, (design.value / largestMatTotal) * 100)}%` }} /></div></div>)}</div>
         </section>
 
-        <section className="insights-row">
-          <article className={`panel capacity-panel${capacityBlockers.length ? " blocked" : ""}`}><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p>{capacityBlockers.length > 0 ? <div className="capacity-blockers"><strong>Fulfillment is blocked by:</strong><ul>{capacityBlockers.map((supply) => <li key={supply.label}><AlertTriangle size={20}/><span><b>{supply.available}</b> {supply.label} available</span></li>)}</ul></div> : <div className="capacity-clear"><PackageCheck size={21}/><strong>All required supplies are available.</strong></div>}</article>
+        <section className="insights-row cadence-only">
           <article className="panel cadence-panel"><p className="eyebrow">FULFILLMENT CADENCE</p><h2>Monday · Wednesday · Friday</h2><p>Orders are prepared and processed through ShipStation three days each week.</p><div className="cadence-days"><span className="active">M</span><span>T</span><span className="active">W</span><span>T</span><span className="active">F</span><span>S</span><span>S</span></div><div className="next-run"><Truck size={17}/><span>Next processing run</span><strong>Monday</strong></div></article>
         </section>
 
