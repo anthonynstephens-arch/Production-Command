@@ -24,6 +24,18 @@ type ShipStationShipment = {
   carrier_code?: string;
 };
 
+type LegacyShipStationOrder = {
+  orderId?: number;
+  orderNumber?: string;
+  orderStatus?: string;
+  customerName?: string;
+  orderDate?: string;
+  shipDate?: string;
+  trackingNumber?: string;
+  carrierCode?: string;
+  items?: Array<{ name?: string; quantity?: number }>;
+};
+
 const demoOrders: PortalOrder[] = [
   { id: "demo-1", orderNumber: "MS-1087", customer: "Danielle Carter", item: "Whatupdoe Welcome Mat", quantity: 1, status: "pending", orderDate: "2026-09-12T13:20:00Z" },
   { id: "demo-2", orderNumber: "MS-1086", customer: "Marcus Hill", item: "Did You Call First Mat", quantity: 2, status: "pending", orderDate: "2026-09-12T10:05:00Z" },
@@ -40,6 +52,7 @@ function normalizeStatus(value?: string): PortalOrder["status"] {
 
 export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; connected: boolean; message?: string }> {
   const apiKey = process.env.SHIPSTATION_API_KEY;
+  const apiSecret = process.env.SHIPSTATION_API_SECRET;
   if (!apiKey) return { orders: demoOrders, connected: false, message: "Add the ShipStation API key to activate live syncing." };
 
   try {
@@ -47,21 +60,34 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
       headers: { "api-key": apiKey, Accept: "application/json" },
       next: { revalidate: 300 },
     });
-    if (!response.ok) throw new Error(`ShipStation returned ${response.status}`);
-    const payload = await response.json() as { shipments?: ShipStationShipment[] };
-    const orders = (payload.shipments ?? []).map((shipment, index): PortalOrder => ({
-      id: shipment.shipment_id ?? shipment.external_shipment_id ?? `shipment-${index}`,
-      orderNumber: shipment.order_number ?? "Unnumbered",
-      customer: shipment.ship_to?.name ?? "Customer",
-      item: shipment.items?.map((item) => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
-      quantity: shipment.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
-      status: normalizeStatus(shipment.shipment_status),
-      orderDate: shipment.created_at ?? new Date().toISOString(),
-      shipDate: shipment.ship_date,
-      trackingNumber: shipment.tracking_number,
-      carrier: shipment.carrier_code?.toUpperCase(),
+    if (response.ok) {
+      const payload = await response.json() as { shipments?: ShipStationShipment[] };
+      const orders = (payload.shipments ?? []).map((shipment, index): PortalOrder => ({
+        id: shipment.shipment_id ?? shipment.external_shipment_id ?? `shipment-${index}`,
+        orderNumber: shipment.order_number ?? "Unnumbered",
+        customer: shipment.ship_to?.name ?? "Customer",
+        item: shipment.items?.map((item) => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
+        quantity: shipment.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
+        status: normalizeStatus(shipment.shipment_status), orderDate: shipment.created_at ?? new Date().toISOString(), shipDate: shipment.ship_date,
+        trackingNumber: shipment.tracking_number, carrier: shipment.carrier_code?.toUpperCase(),
+      }));
+      return { orders, connected: true };
+    }
+    if (!apiSecret) throw new Error(`ShipStation API v2 returned ${response.status}; an API secret is required for legacy credentials.`);
+    const legacy = await fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
+      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" },
+      next: { revalidate: 300 },
+    });
+    if (!legacy.ok) throw new Error(`ShipStation authentication failed (${legacy.status}).`);
+    const payload = await legacy.json() as { orders?: LegacyShipStationOrder[] };
+    const orders = (payload.orders ?? []).filter(order => order.orderStatus !== "cancelled").map((order, index): PortalOrder => ({
+      id: String(order.orderId ?? `legacy-${index}`), orderNumber: order.orderNumber ?? "Unnumbered", customer: order.customerName ?? "Customer",
+      item: order.items?.map(item => item.name).filter(Boolean).join(", ") || "Marsh Supply order",
+      quantity: order.items?.reduce((sum, item) => sum + (item.quantity ?? 1), 0) ?? 1,
+      status: normalizeStatus(order.orderStatus), orderDate: order.orderDate ?? new Date().toISOString(), shipDate: order.shipDate,
+      trackingNumber: order.trackingNumber, carrier: order.carrierCode?.toUpperCase(),
     }));
-    return { orders, connected: true };
+    return { orders, connected: true, message: "Connected with ShipStation API key and secret." };
   } catch (error) {
     return { orders: demoOrders, connected: false, message: error instanceof Error ? error.message : "ShipStation sync unavailable" };
   }
