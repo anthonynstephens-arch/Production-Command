@@ -2,7 +2,7 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 
 export type PortalRole = "admin" | "partner";
-export type PortalSession = { userId: string; name: string; role: PortalRole; expiresAt: number };
+export type PortalSession = { userId: string; name: string; role: PortalRole; mustChangePin: boolean; expiresAt: number };
 const COOKIE_NAME = "production_command_session";
 
 function secret() {
