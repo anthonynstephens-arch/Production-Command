@@ -1,5 +1,6 @@
 import { getPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { lookupInboundTracking } from "@/lib/inbound-tracking";
 
 export async function GET() {
   const session = await getPortalSession();
@@ -33,9 +34,13 @@ export async function POST(request: Request) {
   }
   if (body.type === "delivery") {
     if (!String(body.description || "").trim() || !String(body.trackingNumber || "").trim()) return Response.json({ error: "Item and tracking number are required." }, { status: 400 });
+    const trackingNumber=String(body.trackingNumber).trim().slice(0,120);
+    const tracking=await lookupInboundTracking(trackingNumber,String(body.carrier||"Other"));
     const { error } = await db.from("marsh_incoming_deliveries").insert({
-      description: String(body.description).trim().slice(0, 200), carrier: String(body.carrier || "Other").slice(0, 60), tracking_number: String(body.trackingNumber).trim().slice(0, 120),
-      eta_start: body.etaStart || null, eta_end: body.etaEnd || null, submitted_by: session.userId, submitted_by_name: session.name,
+      description: String(body.description).trim().slice(0, 200), supplier:String(body.supplier||"").trim().slice(0,120)||null,
+      carrier:tracking.carrier, tracking_number:trackingNumber, tracking_url:tracking.trackingUrl||null, tracking_provider:tracking.slug,
+      eta_start:tracking.etaStart, eta_end:tracking.etaEnd, status:tracking.status, tracking_message:tracking.message, last_tracking_check:new Date().toISOString(),
+      submitted_by: session.userId, submitted_by_name: session.name,
     });
     if (error) return Response.json({ error: "Could not save the delivery." }, { status: 500 });
     return Response.json({ ok: true });
@@ -59,6 +64,14 @@ export async function PATCH(request: Request) {
     const { error } = await db.from("marsh_incoming_deliveries").update({ status, delivered_at: status === "delivered" ? new Date().toISOString() : null }).eq("id", body.id);
     if (error) return Response.json({ error: "Could not update delivery." }, { status: 500 });
     return Response.json({ ok: true });
+  }
+  if(body.type === "refresh_delivery") {
+    const {data:item}=await db.from("marsh_incoming_deliveries").select("tracking_number,carrier").eq("id",body.id).single();
+    if(!item) return Response.json({error:"Delivery not found."},{status:404});
+    const tracking=await lookupInboundTracking(item.tracking_number,item.carrier);
+    const {error}=await db.from("marsh_incoming_deliveries").update({carrier:tracking.carrier,tracking_url:tracking.trackingUrl||null,tracking_provider:tracking.slug,eta_start:tracking.etaStart,eta_end:tracking.etaEnd,status:tracking.status,tracking_message:tracking.message,last_tracking_check:new Date().toISOString()}).eq("id",body.id);
+    if(error) return Response.json({error:"Could not refresh tracking."},{status:500});
+    return Response.json({ok:true});
   }
   return Response.json({ error: "Unknown update." }, { status: 400 });
 }
