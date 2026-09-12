@@ -34,10 +34,14 @@ export async function POST(request: Request) {
   }
   if (body.type === "delivery") {
     if (!String(body.description || "").trim() || !String(body.trackingNumber || "").trim()) return Response.json({ error: "Item and tracking number are required." }, { status: 400 });
+    const supplyTypes=["mats","boxes","tape","thankYouCards","polyBags","ink"];
+    const supplyType=supplyTypes.includes(body.supplyType)?body.supplyType:"";
+    const quantity=Number(body.quantity);
+    if(!supplyType||!Number.isFinite(quantity)||quantity<=0) return Response.json({error:"Choose a supply type and enter a valid quantity."},{status:400});
     const trackingNumber=String(body.trackingNumber).trim().slice(0,120);
     const tracking=await lookupInboundTracking(trackingNumber,String(body.carrier||"Other"));
     const { error } = await db.from("marsh_incoming_deliveries").insert({
-      description: String(body.description).trim().slice(0, 200), supplier:String(body.supplier||"").trim().slice(0,120)||null,
+      description: String(body.description).trim().slice(0, 200), supplier:String(body.supplier||"").trim().slice(0,120)||null, supply_type:supplyType, quantity,
       carrier:tracking.carrier, tracking_number:trackingNumber, tracking_url:tracking.trackingUrl||null, tracking_provider:tracking.slug,
       eta_start:tracking.etaStart, eta_end:tracking.etaEnd, status:tracking.status, tracking_message:tracking.message, last_tracking_check:new Date().toISOString(),
       submitted_by: session.userId, submitted_by_name: session.name,
@@ -61,15 +65,22 @@ export async function PATCH(request: Request) {
   }
   if (body.type === "delivery_status") {
     const status = ["expected", "in_transit", "delivered"].includes(body.status) ? body.status : "expected";
-    const { error } = await db.from("marsh_incoming_deliveries").update({ status, delivered_at: status === "delivered" ? new Date().toISOString() : null }).eq("id", body.id);
+    if(status === "delivered" && session.role !== "admin") return Response.json({error:"An admin must confirm that supplies were received."},{status:403});
+    if(status === "delivered") {
+      const {data:applied,error}=await db.from("marsh_incoming_deliveries").update({status,delivered_at:new Date().toISOString(),inventory_applied:true}).eq("id",body.id).eq("inventory_applied",false).select("supply_type,quantity").maybeSingle();
+      if(error) return Response.json({error:"Could not receive delivery."},{status:500});
+      return Response.json({ok:true,inventoryAddition:applied?{key:applied.supply_type,quantity:Number(applied.quantity)}:null});
+    }
+    const { error } = await db.from("marsh_incoming_deliveries").update({ status, delivered_at: null }).eq("id", body.id).eq("inventory_applied",false);
     if (error) return Response.json({ error: "Could not update delivery." }, { status: 500 });
     return Response.json({ ok: true });
   }
   if(body.type === "refresh_delivery") {
-    const {data:item}=await db.from("marsh_incoming_deliveries").select("tracking_number,carrier").eq("id",body.id).single();
+    const {data:item}=await db.from("marsh_incoming_deliveries").select("tracking_number,carrier,inventory_applied").eq("id",body.id).single();
     if(!item) return Response.json({error:"Delivery not found."},{status:404});
     const tracking=await lookupInboundTracking(item.tracking_number,item.carrier);
-    const {error}=await db.from("marsh_incoming_deliveries").update({carrier:tracking.carrier,tracking_url:tracking.trackingUrl||null,tracking_provider:tracking.slug,eta_start:tracking.etaStart,eta_end:tracking.etaEnd,status:tracking.status,tracking_message:tracking.message,last_tracking_check:new Date().toISOString()}).eq("id",body.id);
+    const awaitingReceipt=tracking.status==="delivered"&&!item.inventory_applied;
+    const {error}=await db.from("marsh_incoming_deliveries").update({carrier:tracking.carrier,tracking_url:tracking.trackingUrl||null,tracking_provider:tracking.slug,eta_start:tracking.etaStart,eta_end:tracking.etaEnd,status:awaitingReceipt?"in_transit":tracking.status,tracking_message:awaitingReceipt?"Carrier shows delivered — awaiting receipt confirmation.":tracking.message,last_tracking_check:new Date().toISOString()}).eq("id",body.id);
     if(error) return Response.json({error:"Could not refresh tracking."},{status:500});
     return Response.json({ok:true});
   }
