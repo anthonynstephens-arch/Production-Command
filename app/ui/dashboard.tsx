@@ -151,6 +151,14 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const availableCapacity = Math.min(availableMats, availableBoxes, availableTapeMatCapacity, availableThankYouCards, availablePolyBags);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
   const inventoryWarning = availableCapacity <= 0;
+  const matSales = [
+    { label: "Whatupdoe", value: matTotals.whatupdoe, tone: "green" },
+    { label: "Did You Call First?", value: matTotals.didYouCall, tone: "blue" },
+    { label: "Upside Down Welcome", value: matTotals.upsideDown, tone: "amber" },
+    { label: "Marsh Supply", value: matTotals.marshSupply, tone: "violet" },
+  ];
+  const largestMatTotal = Math.max(1, ...matSales.map((design) => design.value));
+  const matSalesTotal = matSales.reduce((sum, design) => sum + design.value, 0);
   const capacityBlockers = [
     { label: "blank coir mats", available: availableMats },
     { label: "shipping boxes", available: availableBoxes },
@@ -190,11 +198,9 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         </section>
 
         <div className="dashboard-section-heading product-heading"><div><span>03</span><h2>Mat Sales</h2></div><p>Total units sold by design</p></div>
-        <section className="metrics-grid product-sales-grid">
-          <article className="metric"><span className="metric-icon amber"><RectangleHorizontal size={19}/></span><div><p>Whatupdoe</p><strong>{matTotals.whatupdoe}</strong><small>mats sold</small></div></article>
-          <article className="metric"><span className="metric-icon blue"><RectangleHorizontal size={19}/></span><div><p>Did You Call First?</p><strong>{matTotals.didYouCall}</strong><small>mats sold</small></div></article>
-          <article className="metric"><span className="metric-icon green"><RectangleHorizontal size={19}/></span><div><p>Upside Down Welcome</p><strong>{matTotals.upsideDown}</strong><small>mats sold</small></div></article>
-          <article className="metric"><span className="metric-icon violet"><RectangleHorizontal size={19}/></span><div><p>Marsh Supply</p><strong>{matTotals.marshSupply}</strong><small>mats sold</small></div></article>
+        <section className="panel mat-sales-chart" aria-label="Mat sales by design">
+          <div className="chart-heading"><div><p className="eyebrow">DESIGN COMPARISON</p><h2>Units sold</h2></div><strong>{matSalesTotal}<small> total mats</small></strong></div>
+          <div className="bar-chart">{matSales.map((design) => <div className="bar-row" key={design.label}><div className="bar-label"><span>{design.label}</span><strong>{design.value}</strong></div><div className="bar-track"><span className={design.tone} style={{ width: design.value === 0 ? 0 : `${Math.max(6, (design.value / largestMatTotal) * 100)}%` }} /></div></div>)}</div>
         </section>
 
         <section className="insights-row">
