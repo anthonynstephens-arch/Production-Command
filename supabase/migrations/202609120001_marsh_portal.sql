@@ -1,7 +1,7 @@
 create table if not exists public.marsh_inventory (
   id uuid primary key default gen_random_uuid(),
   account_slug text not null default 'marsh-supply',
-  item_key text not null check (item_key in ('blank_mats', 'shipping_boxes', 'ink')),
+  item_key text not null check (item_key in ('blank_mats', 'shipping_boxes', 'ink', 'packing_tape', 'thank_you_cards', 'poly_bags')),
   quantity numeric not null default 0 check (quantity >= 0),
   unit text not null,
   updated_at timestamptz not null default now(),
