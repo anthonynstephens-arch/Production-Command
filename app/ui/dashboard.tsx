@@ -4,24 +4,24 @@ import { useEffect, useMemo, useState } from "react";
 import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 
-type Supply = { mats: number; boxes: number; ink: number; tape: number; thankYouCards: number; polyBags: number };
+type Supply = { mats: number; boxes: number; ink: number; tape: number; tapeCoverage: number; tapeUsage: number; thankYouCards: number; polyBags: number };
 type Props = { initialOrders: PortalOrder[]; initialConnected: boolean; initialMessage?: string };
 
-const defaults: Supply = { mats: 250, boxes: 250, ink: 82, tape: 24, thankYouCards: 250, polyBags: 250 };
+const defaults: Supply = { mats: 250, boxes: 250, ink: 82, tape: 24, tapeCoverage: 25, tapeUsage: 0, thankYouCards: 250, polyBags: 250 };
 
 function Meter({ value, warningAt = 25 }: { value: number; warningAt?: number }) {
   const tone = value <= warningAt ? "danger" : value <= 50 ? "warning" : "healthy";
   return <div className="meter" aria-label={`${value} percent`}><span className={tone} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
-function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, admin, onSet }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; admin: boolean; onSet: (value: number) => void }) {
+function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, available, admin, onSet, extraControl }: { icon: React.ReactNode; title: string; value: number; unit: string; detail: string; percent: number; committed?: number; available?: number; admin: boolean; onSet: (value: number) => void; extraControl?: React.ReactNode }) {
   return (
     <article className="supply-card">
       <div className="card-top"><span className="icon-box">{icon}</span><span className={percent <= 25 ? "stock low" : "stock"}>{percent <= 25 ? "Low stock" : "In stock"}</span></div>
       <div><p className="eyebrow">{title}</p><div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div></div>
       <Meter value={percent} />
       {available !== undefined && <div className="allocation"><div><span>Committed</span><strong>{committed}</strong></div><div><span>Available</span><strong>{available}</strong></div></div>}
-      <div className="supply-footer"><span>{detail}</span>{admin && <label className="manual-adjust"><span>Set count</span><input type="number" min="0" value={value} onChange={(event) => onSet(Number(event.target.value))} /></label>}</div>
+      <div className="supply-footer"><span>{detail}</span><div className="control-stack">{admin && <label className="manual-adjust"><span>Set count</span><input type="number" min="0" value={value} onChange={(event) => onSet(Number(event.target.value))} /></label>}{admin && extraControl}</div></div>
     </article>
   );
 }
@@ -59,11 +59,15 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     const unitsToDeduct = newShipments.reduce((sum, order) => sum + order.quantity, 0);
     if (unitsToDeduct > 0) {
       setSupplies((current) => {
+        const tapeCoverage = Math.max(1, current.tapeCoverage || defaults.tapeCoverage);
+        const accumulatedTapeUse = (current.tapeUsage || 0) + unitsToDeduct;
+        const rollsUsed = Math.floor(accumulatedTapeUse / tapeCoverage);
         const next = {
           ...current,
           mats: Math.max(0, current.mats - unitsToDeduct),
           boxes: Math.max(0, current.boxes - unitsToDeduct),
-          tape: Math.max(0, current.tape - unitsToDeduct),
+          tape: Math.max(0, current.tape - rollsUsed),
+          tapeUsage: accumulatedTapeUse % tapeCoverage,
           thankYouCards: Math.max(0, current.thankYouCards - unitsToDeduct),
           polyBags: Math.max(0, current.polyBags - unitsToDeduct),
         };
@@ -103,10 +107,13 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const committedUnits = orders.filter((order) => order.status === "pending").reduce((sum, order) => sum + order.quantity, 0);
   const availableMats = Math.max(0, supplies.mats - committedUnits);
   const availableBoxes = Math.max(0, supplies.boxes - committedUnits);
-  const availableTape = Math.max(0, supplies.tape - committedUnits);
+  const tapeCoverage = Math.max(1, supplies.tapeCoverage);
+  const committedTapeRolls = Math.ceil((supplies.tapeUsage + committedUnits) / tapeCoverage);
+  const availableTape = Math.max(0, supplies.tape - committedTapeRolls);
+  const availableTapeMatCapacity = Math.max(0, (supplies.tape * tapeCoverage) - supplies.tapeUsage - committedUnits);
   const availableThankYouCards = Math.max(0, supplies.thankYouCards - committedUnits);
   const availablePolyBags = Math.max(0, supplies.polyBags - committedUnits);
-  const availableCapacity = Math.min(availableMats, availableBoxes, availableTape, availableThankYouCards, availablePolyBags);
+  const availableCapacity = Math.min(availableMats, availableBoxes, availableTapeMatCapacity, availableThankYouCards, availablePolyBags);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
 
   return (
@@ -125,7 +132,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <SupplyCard icon={<PackageOpen size={21}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
-          <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail="One reserved per pending mat" percent={supplies.tape > 25 ? 100 : supplies.tape * 4} committed={committedUnits} available={availableTape} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} />
+          <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`} percent={supplies.tape > 10 ? 100 : supplies.tape * 10} committed={committedTapeRolls} available={availableTape} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} extraControl={<label className="manual-adjust"><span>Mats per roll</span><input type="number" min="1" value={tapeCoverage} onChange={(event) => setSupply("tapeCoverage", Math.max(1, Number(event.target.value)))} /></label>} />
           <SupplyCard icon={<Mail size={21}/>} title="Thank-you cards" value={supplies.thankYouCards} unit="cards" detail="One reserved per pending mat" percent={supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4} committed={committedUnits} available={availableThankYouCards} admin={view === "admin"} onSet={(value) => setSupply("thankYouCards", value)} />
           <SupplyCard icon={<ShoppingBag size={21}/>} title="Poly bags" value={supplies.polyBags} unit="bags" detail="One reserved per pending mat" percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4} committed={committedUnits} available={availablePolyBags} admin={view === "admin"} onSet={(value) => setSupply("polyBags", value)} />
         </section>
