@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag } from "lucide-react";
+import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
@@ -23,7 +23,7 @@ function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, 
     <article className={`supply-card${percent <= 25 ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
       <div className="card-top"><div className="card-title-line"><span className="icon-box">{icon}</span><h3>{title}</h3></div></div>
       <div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div>
-      {verticalMeter ? <div className="ink-drop-wrap"><div className="ink-drop" aria-label={`${percent} percent ink`}><span style={{ height: `${percent}%` }} /></div><strong>{percent}%</strong></div> : <Meter value={percent} />}
+      {verticalMeter ? <div className="ink-level-wrap"><div className="ink-level" aria-label={`${percent} percent ink`}><span style={{ height: `${percent}%` }} /></div><strong>{percent}%</strong></div> : <Meter value={percent} />}
       {available !== undefined && <div className="allocation"><div><span>Committed</span><strong>{committed}</strong></div><div><span>Available</span><strong>{available}</strong></div></div>}
       <div className="supply-footer"><span>{detail}</span><div className="control-stack">{admin && <label className="manual-adjust"><span>Set count</span><input type="number" min="0" value={value} onChange={(event) => onSet(Number(event.target.value))} /></label>}{admin && extraControl}</div></div>
     </article>
@@ -136,12 +136,12 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
         <section className="supply-grid">
-          <SupplyCard icon={<PackageOpen size={21}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
+          <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
-          <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
           <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`} percent={supplies.tape > 10 ? 100 : supplies.tape * 10} committed={committedTapeRolls} available={availableTape} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} extraControl={<label className="manual-adjust"><span>Mats per roll</span><input type="number" min="1" value={tapeCoverage} onChange={(event) => setSupply("tapeCoverage", Math.max(1, Number(event.target.value)))} /></label>} />
           <SupplyCard icon={<Mail size={21}/>} title="Thank-you cards" value={supplies.thankYouCards} unit="cards" detail="One reserved per pending mat" percent={supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4} committed={committedUnits} available={availableThankYouCards} admin={view === "admin"} onSet={(value) => setSupply("thankYouCards", value)} />
           <SupplyCard icon={<ShoppingBag size={21}/>} title="Poly bags" value={supplies.polyBags} unit="bags" detail="One reserved per pending mat" percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4} committed={committedUnits} available={availablePolyBags} admin={view === "admin"} onSet={(value) => setSupply("polyBags", value)} />
+          <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
         </section>
 
         <section className="metrics-grid">
