@@ -144,6 +144,9 @@
 .dashboard .summary-copy svg { flex:0 0 auto; margin-top:2px; color:#087f5b; }
 .dashboard .summary-copy.attention { background:#fff4dc; color:#6f4810; }
 .dashboard .summary-copy.attention svg { color:#c17a00; }
+.dashboard .summary-copy.balance-alert { margin-bottom:0; border:1px solid #efb2b6; background:#fff0f1; color:#8f1720; text-decoration:none; }
+.dashboard .summary-copy.balance-alert:hover { border-color:#d94a53; background:#ffe7e9; }
+.dashboard .summary-copy.balance-alert svg { color:#c92a35; }
 .dashboard .summary-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; overflow:hidden; border:1px solid #dce6e1; border-radius:10px; background:#dce6e1; }
 .dashboard .summary-stats>div { padding:10px 12px; background:rgba(255,255,255,.9); }
 .dashboard .summary-stats span,.dashboard .summary-stats strong { display:block; }
