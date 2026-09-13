@@ -208,3 +208,17 @@
 @media(max-width:520px) { .dashboard .supply-grid { grid-template-columns:1fr; } .dashboard .metrics-grid { grid-template-columns:1fr; } .dashboard .metric { align-items:center; } .dashboard .metric strong { font-size:2rem; } .dashboard .panel { padding:20px; } .dashboard .orders-panel { padding:0; } .dashboard .view-toggle { width:auto; height:auto; font-size:.875rem; } .dashboard .page-heading { align-items:stretch; flex-direction:column; } .dashboard .sync-button { width:100%; } .dashboard .chart-heading { gap:16px; } .dashboard .operations-form { padding:16px; } .dashboard .operations-form .sync-button { width:100%; } .dashboard .cadence-days { gap:5px; } .dashboard .cadence-days span { width:34px; height:38px; } .dashboard .inventory-warning { flex-basis:100%; } .dashboard .table-actions { width:100%; } }
 @media(max-width:520px) { .dashboard .metrics-grid { grid-template-columns:1fr 1fr; gap:10px; } .dashboard .metric { min-height:142px; align-items:flex-start; padding:13px; } .dashboard .metric-icon { width:42px; height:42px; flex-basis:42px; } .dashboard .metric-heading { gap:8px; } .dashboard .metric-heading p { font-size:.82rem; } .dashboard .metric-value strong { font-size:1.8rem; } .dashboard .billing-totals { grid-template-columns:1fr; } .dashboard .operations-form input[type="date"] { width:100%; max-width:100%; min-width:0; box-sizing:border-box; } .dashboard .orders-panel td[data-label="Date"] { white-space:nowrap; } }
 @media(prefers-reduced-motion:reduce) { .dashboard *, .dashboard *::before, .dashboard *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } .dashboard .supply-card.low-supply { border-color:#c93239; box-shadow:0 0 0 3px #f5c95570; } }
+
+/* Mobile operations layout: prevent native date controls and delivery actions from overflowing. */
+.dashboard .operations-form input[type="date"] { display:block; width:100%; max-width:100%; min-width:0; box-sizing:border-box; }
+@media(max-width:520px) {
+  .dashboard .operations-form { min-width:0; }
+  .dashboard .operations-form .form-row { grid-template-columns:minmax(0,1fr); }
+  .dashboard .operations-form label { min-width:0; }
+  .dashboard .delivery-row { display:grid; grid-template-columns:42px minmax(0,1fr) 42px; align-items:start; gap:12px; }
+  .dashboard .delivery-row .delivery-icon { grid-column:1; grid-row:1; }
+  .dashboard .delivery-row .delivery-details { grid-column:2 / 4; grid-row:1; width:100%; }
+  .dashboard .delivery-row .tracking-refresh { grid-column:1; grid-row:2; margin:0; }
+  .dashboard .delivery-row select { grid-column:2; grid-row:2; width:100%; max-width:none; margin:0; min-height:42px; }
+  .dashboard .delivery-row .delivery-delete { grid-column:3; grid-row:2; margin:0; }
+}

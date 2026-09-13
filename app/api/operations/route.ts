@@ -79,13 +79,15 @@ export async function PATCH(request: Request) {
     const status = ["expected", "in_transit", "delivered"].includes(body.status) ? body.status : "expected";
     if(status === "delivered" && session.role !== "admin") return Response.json({error:"An admin must confirm that supplies were received."},{status:403});
     if(status === "delivered") {
-      const {data:applied,error}=await db.from("marsh_incoming_deliveries").update({status,delivered_at:new Date().toISOString(),inventory_applied:true}).eq("id",body.id).eq("inventory_applied",false).select("supply_type,quantity").maybeSingle();
+      const {data:applied,error}=await db.from("marsh_incoming_deliveries").update({status,delivered_at:new Date().toISOString(),inventory_applied:true}).eq("id",body.id).eq("inventory_applied",false).select("id,status,supply_type,quantity").maybeSingle();
       if(error) return Response.json({error:"Could not receive delivery."},{status:500});
-      return Response.json({ok:true,inventoryAddition:applied?{key:applied.supply_type,quantity:Number(applied.quantity)}:null});
+      if(!applied) return Response.json({error:"This delivery was already received or could not be updated."},{status:409});
+      return Response.json({ok:true,delivery:applied,inventoryAddition:{key:applied.supply_type,quantity:Number(applied.quantity)}});
     }
-    const { error } = await db.from("marsh_incoming_deliveries").update({ status, delivered_at: null }).eq("id", body.id).eq("inventory_applied",false);
+    const { data:updated,error } = await db.from("marsh_incoming_deliveries").update({ status, delivered_at: null }).eq("id", body.id).eq("inventory_applied",false).select("id,status").maybeSingle();
     if (error) return Response.json({ error: "Could not update delivery." }, { status: 500 });
-    return Response.json({ ok: true });
+    if(!updated) return Response.json({error:"This delivery was already received or could not be updated."},{status:409});
+    return Response.json({ ok: true, delivery:updated });
   }
   if(body.type === "refresh_delivery") {
     const {data:item}=await db.from("marsh_incoming_deliveries").select("tracking_number,carrier,inventory_applied").eq("id",body.id).single();
