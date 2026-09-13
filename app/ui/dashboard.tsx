@@ -26,8 +26,10 @@ function SupplyCard({ icon, title, value, unit, detail, percent, committed = 0, 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   useEffect(() => { setDraft(String(value)); }, [value]);
+  const lowSupply = low ?? percent <= 25;
   return (
-    <article className={`supply-card${(low ?? percent <= 25) ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
+    <article className={`supply-card${lowSupply ? " low-supply" : ""}${verticalMeter ? " ink-card" : ""}`}>
+      {lowSupply && <span className="card-warning" title="Purchase recommended" aria-label="Purchase recommended"><AlertTriangle size={17}/></span>}
       <div className="card-top"><div className="card-title-line"><span className="icon-box">{icon}</span><h3>{title}</h3></div></div>
       <div className="supply-value">{value.toLocaleString()} <small>{unit} on hand</small></div>
       {verticalMeter ? <div className="ink-level-wrap"><div className="ink-level" aria-label={`${percent} percent ink`}><span style={{ height: `${percent}%` }} /></div><strong>{percent}%</strong></div> : <Meter value={percent} />}
@@ -215,6 +217,11 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     { label: "thank-you cards", available: availableThankYouCards },
     { label: "poly bags", available: availablePolyBags },
   ].filter((supply) => supply.available <= 0);
+  const lowSupplyNames = [availableMats <= 0 ? "blank coir mats" : null, availableBoxes <= 0 ? "shipping boxes" : null, availableTapeMatCapacity <= 0 ? "packing tape" : null, availableThankYouCards <= 0 ? "thank-you cards" : null, availablePolyBags <= 0 ? "poly bags" : null, inkPercent <= 25 ? "black ink" : null].filter(Boolean) as string[];
+  const newOrdersThisWeek = orders.filter((order) => Date.now() - new Date(order.orderDate).getTime() <= 7 * 86400000).length;
+  const shippedWithDates = orders.filter((order) => order.shipDate && Number.isFinite(new Date(order.orderDate).getTime()) && Number.isFinite(new Date(order.shipDate).getTime()));
+  const averageOrderToShip = shippedWithDates.length ? shippedWithDates.reduce((total, order) => total + Math.max(0, (new Date(order.shipDate!).getTime() - new Date(order.orderDate).getTime()) / 86400000), 0) / shippedWithDates.length : null;
+  const pipelineOrders = counts.pending + ordersInProduction;
 
   return (
     <main className="dashboard">
@@ -241,12 +248,12 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
       <div className="page-shell">
         <nav className="dashboard-nav" aria-label="Dashboard sections"><a href="#inventory">Inventory</a><a href="#pipeline">Orders & capacity</a><a href="#mat-sales">Mat sales</a><a href="#operations">Payments & deliveries</a><a href="#order-queue">Fulfillment queue</a></nav>
-        <section className="page-heading"><div><p className="kicker">FULFILLMENT OVERVIEW</p><h1>Marsh Supply Command Center</h1><p>Inventory and order movement across the Whatupdoe mat program.</p></div>{session.role === "admin" && <button className="sync-button page-sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}</section>
+        <section className="overview-summary"><div className="overview-topline"><p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>{session.role === "admin" && <button className="sync-button page-sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}</div><p className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`}>{lowSupplyNames.length ? <><AlertTriangle size={19}/><span><strong>Purchasing recommended:</strong> Replenish {lowSupplyNames.join(", ")} to keep fulfillment moving. Current supplies support approximately <strong>{availableCapacity} additional orders</strong> after commitments.</span></> : <><PackageCheck size={19}/><span><strong>Inventory is ready.</strong> Current supplies support approximately {availableCapacity} additional orders after commitments.</span></>}</p><div className="summary-stats"><div><span>Pipeline</span><strong>{pipelineOrders} orders</strong></div><div><span>New in 7 days</span><strong>{newOrdersThisWeek}</strong></div><div><span>Avg. order to ship</span><strong>{averageOrderToShip === null ? "Not enough data" : `${averageOrderToShip.toFixed(1)} days`}</strong></div><div><span>Available capacity</span><strong>{availableCapacity} orders</strong></div></div></section>
 
         <div className="sync-feedback" role="status" aria-live="polite">{syncing ? "Checking ShipStation for updates…" : syncError ? <span className="sync-error">{syncError} Displayed orders have not been replaced.</span> : lastSync ? `Orders refreshed at ${lastSync}.` : connected ? "ShipStation orders loaded with this page." : "Demo data · live orders unavailable"}</div>
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
-        <div className="dashboard-section-heading" id="inventory"><div><span>01</span><h2>Inventory &amp; Supplies</h2>{inventoryWarning && <strong className="inventory-warning"><AlertTriangle size={17}/>Inventory needs to be purchased</strong>}</div><p>On hand · committed · available</p></div>
+        <div className="dashboard-section-heading" id="inventory"><div><span>01</span><h2>Inventory &amp; Supplies</h2></div><p>On hand · committed · available</p></div>
         <section className="supply-grid">
           <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} incoming={incoming.mats} low={availableMats <= 0} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} incoming={incoming.boxes} low={availableBoxes <= 0} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
@@ -258,11 +265,11 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
         <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span>02</span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
         <section className="metrics-grid">
-          <article className="metric"><span className="metric-icon amber"><PackageOpen size={19}/></span><div><p>Orders pending</p><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
-          <article className="metric production-metric"><span className="metric-icon violet"><Factory size={27}/></span><div><p>In production</p><strong>{ordersInProduction}</strong><small>Currently being produced</small>{session.role === "admin" && view === "admin" && <div className="production-adjust"><input aria-label="Orders currently in production" type="number" min="0" step="1" value={productionDraft} onChange={(event) => setProductionDraft(event.target.value)}/><button type="button" onClick={saveProductionCount} disabled={productionSaving}>{productionSaving ? "Saving…" : "Set"}</button></div>}</div></article>
-          <article className="metric"><span className="metric-icon blue"><Truck size={19}/></span><div><p>Orders shipped</p><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
-          <article className="metric"><span className="metric-icon green"><PackageCheck size={19}/></span><div><p>Orders delivered</p><strong>{counts.delivered}</strong><small>Successfully completed</small></div></article>
-          <article className="metric"><span className="metric-icon violet"><TrendingUp size={19}/></span><div><p>Total units</p><strong>{counts.units}</strong><small>Across visible orders</small></div></article>
+          <article className="metric"><div className="metric-heading"><span className="metric-icon amber"><PackageOpen size={23}/></span><p>Orders pending</p></div><div className="metric-value"><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
+          <article className="metric production-metric"><div className="metric-heading"><span className="metric-icon violet"><Factory size={23}/></span><p>In production</p></div><div className="metric-value"><strong>{ordersInProduction}</strong><small>Currently being produced</small>{session.role === "admin" && view === "admin" && <div className="production-adjust"><input aria-label="Orders currently in production" type="number" min="0" step="1" value={productionDraft} onChange={(event) => setProductionDraft(event.target.value)}/><button type="button" onClick={saveProductionCount} disabled={productionSaving}>{productionSaving ? "Saving…" : "Set"}</button></div>}</div></article>
+          <article className="metric"><div className="metric-heading"><span className="metric-icon blue"><Truck size={23}/></span><p>Orders shipped</p></div><div className="metric-value"><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
+          <article className="metric"><div className="metric-heading"><span className="metric-icon green"><PackageCheck size={23}/></span><p>Orders delivered</p></div><div className="metric-value"><strong>{counts.delivered}</strong><small>Successfully completed</small></div></article>
+          <article className="metric"><div className="metric-heading"><span className="metric-icon violet"><TrendingUp size={23}/></span><p>Total units</p></div><div className="metric-value"><strong>{counts.units}</strong><small>Across visible orders</small></div></article>
         </section>
 
         <article className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p>{capacityBlockers.length > 0 ? <div className="capacity-blockers"><strong>Fulfillment is blocked by:</strong><ul>{capacityBlockers.map((supply) => <li key={supply.label}><AlertTriangle size={20}/><span><b>{supply.available}</b> {supply.label} available</span></li>)}</ul></div> : <div className="capacity-clear"><PackageCheck size={21}/><strong>All required supplies are available.</strong></div>}</article>
