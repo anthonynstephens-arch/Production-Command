@@ -105,9 +105,24 @@ export async function DELETE(request: Request) {
   if (session.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const id = String(body.id || "");
-  if (!id) return Response.json({ error: "Delivery ID is required." }, { status: 400 });
+  const type = String(body.type || "delivery");
+  if (!id) return Response.json({ error: "Record ID is required." }, { status: 400 });
 
   const db = getSupabaseAdmin();
+  if (type === "payment") {
+    const { data, error } = await db.from("marsh_payments").delete().eq("id", id).select("id").maybeSingle();
+    if (error) return Response.json({ error: "Could not delete the payment." }, { status: 500 });
+    if (!data) return Response.json({ error: "Payment not found." }, { status: 404 });
+    return Response.json({ ok: true });
+  }
+  if (type === "charge") {
+    const { data, error } = await db.from("marsh_charges").delete().eq("id", id).select("id").maybeSingle();
+    if (error) return Response.json({ error: "Could not delete the charge." }, { status: 500 });
+    if (!data) return Response.json({ error: "Charge not found." }, { status: 404 });
+    return Response.json({ ok: true });
+  }
+  if (type !== "delivery") return Response.json({ error: "Unknown record type." }, { status: 400 });
+
   const { data: delivery, error: lookupError } = await db.from("marsh_incoming_deliveries").select("id,inventory_applied").eq("id", id).maybeSingle();
   if (lookupError) return Response.json({ error: "Could not check the shipment." }, { status: 500 });
   if (!delivery) return Response.json({ error: "Incoming shipment not found." }, { status: 404 });
