@@ -100,8 +100,6 @@ export async function DELETE(request: Request) {
   const { data: delivery, error: lookupError } = await db.from("marsh_incoming_deliveries").select("id,inventory_applied").eq("id", id).maybeSingle();
   if (lookupError) return Response.json({ error: "Could not check the shipment." }, { status: 500 });
   if (!delivery) return Response.json({ error: "Incoming shipment not found." }, { status: 404 });
-  if (delivery.inventory_applied) return Response.json({ error: "This shipment was already received and added to inventory. Adjust the inventory count before removing its record." }, { status: 409 });
-
   const { error } = await db.from("marsh_incoming_deliveries").delete().eq("id", id);
   if (error) return Response.json({ error: "Could not delete the incoming shipment." }, { status: 500 });
   return Response.json({ ok: true });
