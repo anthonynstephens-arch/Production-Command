@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X } from "lucide-react";
+import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X, Factory } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
@@ -61,6 +61,9 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [view, setView] = useState<"admin" | "marsh">(session.role === "admin" ? "admin" : "marsh");
   const [incoming, setIncoming] = useState<Partial<Record<SupplyKey, number>>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [ordersInProduction, setOrdersInProduction] = useState(0);
+  const [productionDraft, setProductionDraft] = useState("0");
+  const [productionSaving, setProductionSaving] = useState(false);
 
   const loadInventory = async () => {
     const response = await fetch("/api/inventory", { cache: "no-store" });
@@ -76,6 +79,29 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     window.addEventListener("focus", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, []);
+
+  useEffect(() => {
+    const loadProductionCount = async () => {
+      const response = await fetch("/api/dashboard-state", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      const value = Number(data.ordersInProduction) || 0;
+      setOrdersInProduction(value);
+      setProductionDraft(String(value));
+    };
+    loadProductionCount();
+    const timer = window.setInterval(loadProductionCount, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const saveProductionCount = async () => {
+    setProductionSaving(true);
+    try {
+      const response = await fetch("/api/dashboard-state", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ordersInProduction: Number(productionDraft) }) });
+      const data = await response.json();
+      if (response.ok) setOrdersInProduction(data.ordersInProduction);
+    } finally { setProductionSaving(false); }
+  };
 
   useEffect(() => {
     const currentShipped = orders.filter((order) => order.status === "shipped" || order.status === "delivered").map((order) => order.id);
@@ -233,6 +259,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span>02</span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
         <section className="metrics-grid">
           <article className="metric"><span className="metric-icon amber"><PackageOpen size={19}/></span><div><p>Orders pending</p><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
+          <article className="metric production-metric"><span className="metric-icon violet"><Factory size={27}/></span><div><p>In production</p><strong>{ordersInProduction}</strong><small>Currently being produced</small>{session.role === "admin" && view === "admin" && <div className="production-adjust"><input aria-label="Orders currently in production" type="number" min="0" step="1" value={productionDraft} onChange={(event) => setProductionDraft(event.target.value)}/><button type="button" onClick={saveProductionCount} disabled={productionSaving}>{productionSaving ? "Saving…" : "Set"}</button></div>}</div></article>
           <article className="metric"><span className="metric-icon blue"><Truck size={19}/></span><div><p>Orders shipped</p><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
           <article className="metric"><span className="metric-icon green"><PackageCheck size={19}/></span><div><p>Orders delivered</p><strong>{counts.delivered}</strong><small>Successfully completed</small></div></article>
           <article className="metric"><span className="metric-icon violet"><TrendingUp size={19}/></span><div><p>Total units</p><strong>{counts.units}</strong><small>Across visible orders</small></div></article>
