@@ -6,12 +6,13 @@ export async function GET() {
   const session = await getPortalSession();
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const db = getSupabaseAdmin();
-  const [payments, deliveries] = await Promise.all([
+  const [payments, deliveries, charges] = await Promise.all([
     db.from("marsh_payments").select("*").order("created_at", { ascending: false }).limit(50),
     db.from("marsh_incoming_deliveries").select("*").order("created_at", { ascending: false }).limit(50),
+    db.from("marsh_charges").select("*").order("charge_date", { ascending: false }).order("created_at", { ascending: false }).limit(50),
   ]);
-  if (payments.error || deliveries.error) return Response.json({ error: "Could not load operations records." }, { status: 500 });
-  return Response.json({ payments: payments.data, deliveries: deliveries.data });
+  if (payments.error || deliveries.error || charges.error) return Response.json({ error: "Could not load operations records." }, { status: 500 });
+  return Response.json({ payments: payments.data, deliveries: deliveries.data, charges: charges.data });
 }
 
 export async function POST(request: Request) {
@@ -48,6 +49,16 @@ export async function POST(request: Request) {
       submitted_by: session.userId, submitted_by_name: session.name,
     });
     if (error) return Response.json({ error: "Could not save the delivery." }, { status: 500 });
+    return Response.json({ ok: true });
+  }
+  if (body.type === "charge") {
+    if (session.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+    const amount = Number(body.amount);
+    const description = String(body.description || "").trim().slice(0, 240);
+    if (!Number.isFinite(amount) || amount <= 0) return Response.json({ error: "Enter a valid charge amount." }, { status: 400 });
+    if (description.length < 2) return Response.json({ error: "Enter a description for the charge." }, { status: 400 });
+    const { error } = await db.from("marsh_charges").insert({ amount, description, charge_date: body.chargeDate || new Date().toISOString().slice(0, 10), created_by: session.userId, created_by_name: session.name });
+    if (error) return Response.json({ error: "Could not save the charge." }, { status: 500 });
     return Response.json({ ok: true });
   }
   return Response.json({ error: "Unknown record type." }, { status: 400 });
