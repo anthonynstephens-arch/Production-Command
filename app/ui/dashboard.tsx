@@ -201,7 +201,6 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const availablePolyBags = Math.max(0, supplies.polyBags - committedUnits);
   const availableCapacity = Math.min(availableMats, availableBoxes, availableTapeMatCapacity, availableThankYouCards, availablePolyBags);
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
-  const inventoryWarning = availableCapacity <= 0;
   const matSales = [
     { label: "Whatupdoe", value: matTotals.whatupdoe, tone: "green" },
     { label: "Did You Call First?", value: matTotals.didYouCall, tone: "blue" },
@@ -253,7 +252,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         <div className="sync-feedback" role="status" aria-live="polite">{syncing ? "Checking ShipStation for updates…" : syncError ? <span className="sync-error">{syncError} Displayed orders have not been replaced.</span> : lastSync ? `Orders refreshed at ${lastSync}.` : connected ? "ShipStation orders loaded with this page." : "Demo data · live orders unavailable"}</div>
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
-        <div className="dashboard-section-heading" id="inventory"><div><span>01</span><h2>Inventory &amp; Supplies</h2></div><p>On hand · committed · available</p></div>
+        <div className="dashboard-section-heading" id="inventory"><div><span className="section-icon"><Boxes size={18}/></span><h2>Inventory &amp; Supplies</h2></div><p>On hand · committed · available</p></div>
         <section className="supply-grid">
           <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} incoming={incoming.mats} low={availableMats <= 0} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} incoming={incoming.boxes} low={availableBoxes <= 0} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
@@ -263,7 +262,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} incoming={incoming.ink} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
         </section>
 
-        <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span>02</span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
+        <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span className="section-icon"><PackageOpen size={18}/></span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
         <section className="metrics-grid">
           <article className="metric"><div className="metric-heading"><span className="metric-icon amber"><PackageOpen size={23}/></span><p>Orders pending</p></div><div className="metric-value"><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
           <article className="metric production-metric"><div className="metric-heading"><span className="metric-icon violet"><Factory size={23}/></span><p>In production</p></div><div className="metric-value"><strong>{ordersInProduction}</strong><small>Currently being produced</small>{session.role === "admin" && view === "admin" && <div className="production-adjust"><input aria-label="Orders currently in production" type="number" min="0" step="1" value={productionDraft} onChange={(event) => setProductionDraft(event.target.value)}/><button type="button" onClick={saveProductionCount} disabled={productionSaving}>{productionSaving ? "Saving…" : "Set"}</button></div>}</div></article>
@@ -274,7 +273,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
         <article className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}><div className="panel-heading"><div><p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p><h2>{availableCapacity} orders</h2></div><span className="icon-box"><Settings2 size={19}/></span></div><p>After reserving supplies for <strong>{committedUnits} pending units</strong>, you can accept up to <strong>{availableCapacity} additional single-mat orders</strong>.</p>{capacityBlockers.length > 0 ? <div className="capacity-blockers"><strong>Fulfillment is blocked by:</strong><ul>{capacityBlockers.map((supply) => <li key={supply.label}><AlertTriangle size={20}/><span><b>{supply.available}</b> {supply.label} available</span></li>)}</ul></div> : <div className="capacity-clear"><PackageCheck size={21}/><strong>All required supplies are available.</strong></div>}</article>
 
-        <div className="dashboard-section-heading product-heading" id="mat-sales"><div><span>03</span><h2>Mat Sales</h2></div><p>Design totals from loaded orders</p></div>
+        <div className="dashboard-section-heading product-heading" id="mat-sales"><div><span className="section-icon"><TrendingUp size={18}/></span><h2>Mat Sales</h2></div><p>Design totals from loaded orders</p></div>
         <section className="panel mat-sales-chart" aria-label="Mat sales by design">
           <div className="chart-heading"><div><p className="eyebrow">DESIGN COMPARISON</p><h2>Units sold</h2></div><strong>{matSalesTotal}<small> total mats</small></strong></div>
           <div className="bar-chart">{matSales.map((design) => <div className="bar-row" key={design.label}><div className="bar-label"><span>{design.label}</span><strong>{design.value.toLocaleString()}</strong></div><div className="bar-track" aria-hidden="true"><span className={design.tone} style={{ width: `${(design.value / largestMatTotal) * 100}%` }} /></div></div>)}</div>
