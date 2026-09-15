@@ -44,9 +44,9 @@ export default function PortalAccess() {
     <div className="access-heading"><div className="icon-box"><Users size={20}/></div><div><h2 id="portal-access-title">Portal access granted to</h2><p>Last login activity.</p></div></div>
     {error && <p role="alert">{error}</p>}
     {loading ? <p>Loading portal access…</p> : <div className="portal-access-grid">{users.map(user => <article className="portal-access-person" key={user.id}>
-      <strong>{user.display_name}</strong><span className="portal-access-location">{user.location}</span>
-      <span className="portal-access-label">Last login</span>
-      {user.last_login ? <time dateTime={user.last_login}>{timeAgo(user.last_login, now)}</time> : <span>Not signed in yet</span>}
+      <div className="portal-access-identity"><strong>{user.display_name}</strong><span className="portal-access-location">{user.location}</span></div>
+      <div className="portal-access-login"><span className="portal-access-label">Last login</span>
+      {user.last_login ? <time dateTime={user.last_login}>{timeAgo(user.last_login, now)}</time> : <span>Not signed in yet</span>}</div>
     </article>)}</div>}
   </section>;
 }
