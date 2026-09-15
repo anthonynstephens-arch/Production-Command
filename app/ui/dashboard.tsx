@@ -7,6 +7,7 @@ import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Set
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
+import PortalAccess from "./portal-access";
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 
@@ -292,6 +293,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td data-label="Order"><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></td><td data-label="Customer">{order.customer}</td><td data-label="Product" className="product-cell">{order.item}</td><td data-label="Quantity">{order.quantity}</td><td data-label="Status"><StatusBadge status={order.status}/></td><td data-label="Tracking">{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td data-label="Date">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
           <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>{lastSync ? `Last successful refresh: ${lastSync}` : "Loaded with page"}</span></footer>
         </section>
+        <PortalAccess/>
         {session.role === "admin" && view === "admin" && <AccessManager/>}
         <Messenger session={session}/>
       </div>
