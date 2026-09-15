@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   }
   if (body.type === "charge") {
-    if (session.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+    if (!session.canCreateCharges) return Response.json({ error: "Admin access required." }, { status: 403 });
     const amount = Number(body.amount);
     const description = String(body.description || "").trim().slice(0, 240);
     if (!Number.isFinite(amount) || amount <= 0) return Response.json({ error: "Enter a valid charge amount." }, { status: 400 });

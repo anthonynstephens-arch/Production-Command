@@ -8,6 +8,7 @@ import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
 import FinancialLogistics from "./financial-logistics";
+import Messenger from "./messenger";
 
 type Supply = { mats: number; boxes: number; ink: number; tape: number; tapeCoverage: number; tapeUsage: number; thankYouCards: number; polyBags: number };
 type SupplyKey = "mats" | "boxes" | "ink" | "tape" | "thankYouCards" | "polyBags";
@@ -285,13 +286,14 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <article className="panel cadence-panel"><p className="eyebrow">FULFILLMENT CADENCE</p><h2>Monday · Wednesday · Friday</h2><p>Orders are prepared and processed through ShipStation three days each week.</p><div className="cadence-days"><span className="active">M</span><span>T</span><span className="active">W</span><span>T</span><span className="active">F</span><span>S</span><span>S</span></div><div className="next-run"><Truck size={17}/><span>Next processing run</span><strong>Monday</strong></div></article>
         </section>
 
-        <div id="operations"><FinancialLogistics session={session} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply} onBalanceChange={setBalanceOwed}/></div>
+        <div id="operations"><FinancialLogistics session={{...session, canCreateCharges: session.canCreateCharges && view === "admin"}} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply} onBalanceChange={setBalanceOwed}/></div>
 
         <section className="panel orders-panel" id="order-queue"><div className="orders-head"><div><p className="eyebrow">ORDER ACTIVITY</p><h2>Fulfillment queue</h2></div><div className="table-actions"><label className="search"><Search size={16}/><input aria-label="Search fulfillment orders" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search orders" /></label><select aria-label="Filter by order status" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option></select></div></div>
           <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td data-label="Order"><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></td><td data-label="Customer">{order.customer}</td><td data-label="Product" className="product-cell">{order.item}</td><td data-label="Quantity">{order.quantity}</td><td data-label="Status"><StatusBadge status={order.status}/></td><td data-label="Tracking">{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td data-label="Date">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
           <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>{lastSync ? `Last successful refresh: ${lastSync}` : "Loaded with page"}</span></footer>
         </section>
         {session.role === "admin" && view === "admin" && <AccessManager/>}
+        <Messenger session={session}/>
       </div>
     </main>
   );

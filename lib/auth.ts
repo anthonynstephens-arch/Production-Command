@@ -1,8 +1,9 @@
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { getSupabaseAdmin } from "./supabase-admin";
 
 export type PortalRole = "admin" | "partner";
-export type PortalSession = { userId: string; name: string; role: PortalRole; mustChangePin: boolean; expiresAt: number };
+export type PortalSession = { userId: string; name: string; role: PortalRole; mustChangePin: boolean; canCreateCharges?: boolean; expiresAt: number };
 const COOKIE_NAME = "production_command_session";
 
 function secret() {
@@ -38,7 +39,12 @@ export async function getPortalSession(): Promise<PortalSession | null> {
   if (supplied.length !== expected.length || !timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, "base64url").toString()) as PortalSession;
-    return session.expiresAt > Date.now() ? session : null;
+    if (session.expiresAt <= Date.now()) return null;
+    const { data: user, error } = await getSupabaseAdmin().from("marsh_portal_users")
+      .select("display_name,role,active,must_change_pin,can_create_charges").eq("id", session.userId).maybeSingle();
+    if (error || !user?.active) return null;
+    return { ...session, name: user.display_name, role: user.role, mustChangePin: user.must_change_pin,
+      canCreateCharges: user.role === "admin" && user.can_create_charges === true };
   } catch { return null; }
 }
 
