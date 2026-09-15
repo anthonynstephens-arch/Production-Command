@@ -71,7 +71,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
     if (apiSecret) {
       const legacy = await fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
         headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" },
-        cache: "no-store",
+        cache: "no-store", signal: AbortSignal.timeout(12000),
       });
       if (!legacy.ok) throw new Error(`ShipStation authentication failed (${legacy.status}).`);
       const payload = await legacy.json() as { orders?: LegacyShipStationOrder[] };
@@ -88,7 +88,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
 
     const response = await fetch("https://api.shipstation.com/v2/orders?page_size=100&sort_dir=desc", {
       headers: { "api-key": apiKey, Accept: "application/json" },
-      cache: "no-store",
+      cache: "no-store", signal: AbortSignal.timeout(12000),
     });
     if (response.ok) {
       const payload = await response.json() as { orders?: ShipStationOrder[] };

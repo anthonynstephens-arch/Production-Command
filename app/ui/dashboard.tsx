@@ -8,6 +8,7 @@ import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
 import PortalAccess from "./portal-access";
+import NotificationSettings, { disconnectPushDevice } from "./notification-settings";
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 
@@ -168,7 +169,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     } finally { setSyncing(false); }
   };
 
-  const logout = async () => { await fetch("/api/session/logout", { method: "POST" }); router.push("/login"); router.refresh(); };
+  const logout = async () => { try { await disconnectPushDevice(); } catch {} await fetch("/api/session/logout", { method: "POST" }); router.push("/login"); router.refresh(); };
 
   const counts = useMemo(() => ({
     pending: orders.filter((order) => order.status === "pending").length,
@@ -248,7 +249,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         </div>}
       </header>
 
-      <div className="page-shell">
+      <div className="page-shell"><div className="notification-toolbar"><NotificationSettings/></div>
         <nav className="dashboard-nav" aria-label="Dashboard sections"><a href="#inventory">Inventory</a><a href="#pipeline">Orders & capacity</a><a href="#mat-sales">Mat sales</a><a href="#operations">Payments & deliveries</a><a href="#order-queue">Fulfillment queue</a></nav>
         <section className="overview-summary"><div className="overview-topline"><p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>{session.role === "admin" && <button className="sync-button page-sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}</div>{balanceOwed>0&&<a className="summary-copy balance-alert" href="#operations"><AlertTriangle size={19}/><span><strong>Payment due: ${balanceOwed.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> remains outstanding on the payment ledger. View charges and recorded payments.</span></a>}<p className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`}>{lowSupplyNames.length ? <><AlertTriangle size={19}/><span><strong>Purchasing recommended:</strong> Replenish {lowSupplyNames.join(", ")} to keep fulfillment moving. Current supplies support approximately <strong>{availableCapacity} additional orders</strong> after commitments.</span></> : <><PackageCheck size={19}/><span><strong>Inventory is ready.</strong> Current supplies support approximately {availableCapacity} additional orders after commitments.</span></>}</p><div className="summary-stats"><div><span>Pipeline</span><strong>{pipelineOrders} orders</strong></div><div><span>New in 7 days</span><strong>{newOrdersThisWeek}</strong></div><div><span>Avg. order to ship</span><strong>{averageOrderToShip === null ? "Not enough data" : `${averageOrderToShip.toFixed(1)} days`}</strong></div><div><span>Available capacity</span><strong>{availableCapacity} orders</strong></div></div></section>
 
@@ -256,7 +257,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
 
         <div className="dashboard-section-heading" id="inventory"><div><span className="section-icon"><Boxes size={18}/></span><h2>Inventory &amp; Supplies</h2></div><p>On hand · committed · available</p></div>
-        <section className="supply-grid">
+        <section className="supply-grid" id="supplies">
           <SupplyCard icon={<RectangleHorizontal size={23}/>} title="Blank coir mats" value={supplies.mats} unit="mats" detail="Newly shipped units deduct automatically" percent={supplies.mats > 25 ? 100 : supplies.mats * 4} committed={committedUnits} available={availableMats} incoming={incoming.mats} low={availableMats <= 0} admin={view === "admin"} onSet={(value) => setSupply("mats", value)} />
           <SupplyCard icon={<Box size={21}/>} title="Shipping boxes" value={supplies.boxes} unit="boxes" detail="One box reserved per pending unit" percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4} committed={committedUnits} available={availableBoxes} incoming={incoming.boxes} low={availableBoxes <= 0} admin={view === "admin"} onSet={(value) => setSupply("boxes", value)} />
           <SupplyCard icon={<Package size={21}/>} title="Packing tape" value={supplies.tape} unit="rolls" detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`} percent={supplies.tape > 10 ? 100 : supplies.tape * 10} committed={committedTapeRolls} available={availableTape} incoming={incoming.tape} low={availableTapeMatCapacity <= 0} admin={view === "admin"} onSet={(value) => setSupply("tape", value)} extraControl={<label className="manual-adjust"><span>Mats per roll</span><input type="number" min="1" value={tapeCoverage} onChange={(event) => setSupply("tapeCoverage", Math.max(1, Number(event.target.value)))} /></label>} />

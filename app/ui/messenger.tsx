@@ -19,6 +19,7 @@ export default function Messenger({session}:{session:PortalSession}) {
   const currentPeer=useRef(peer), end=useRef<HTMLDivElement>(null), launcher=useRef<HTMLButtonElement>(null), panel=useRef<HTMLDivElement>(null);
   const retry=useRef<{peer:string;body:string;id:string}|null>(null);
   currentPeer.current=peer;
+  useEffect(()=>{const target=new URLSearchParams(window.location.search).get('chat');if(target&&(target==='group'||/^[0-9a-f-]{36}$/i.test(target))){setPeer(target);setOpen(true);}},[]);
   const loadContacts=useCallback(async()=>{const data=await api("/api/messages");setContacts(data.contacts);setGroupUnread(data.groupUnread || 0);},[]);
   useEffect(()=>{let stopped=false;let timer:ReturnType<typeof setTimeout>;const poll=async()=>{try{if(!document.hidden)await loadContacts();}catch(e){if(!stopped)setError((e as Error).message);}finally{if(!stopped)timer=setTimeout(poll,open?3000:10000);}};void poll();return()=>{stopped=true;clearTimeout(timer);};},[loadContacts,open]);
   useEffect(()=>{
