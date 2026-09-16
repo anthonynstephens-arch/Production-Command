@@ -103,9 +103,13 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const saveProductionCount = async () => {
     setProductionSaving(true);
     try {
-      const response = await fetch("/api/dashboard-state", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ordersInProduction: Number(productionDraft) }) });
+      const nextProductionCount = Math.min(counts.pending, Math.max(0, Math.trunc(Number(productionDraft) || 0)));
+      const response = await fetch("/api/dashboard-state", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ordersInProduction: nextProductionCount }) });
       const data = await response.json();
-      if (response.ok) setOrdersInProduction(data.ordersInProduction);
+      if (response.ok) {
+        setOrdersInProduction(data.ordersInProduction);
+        setProductionDraft(String(data.ordersInProduction));
+      }
     } finally { setProductionSaving(false); }
   };
 
@@ -224,7 +228,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const newOrdersThisWeek = orders.filter((order) => Date.now() - new Date(order.orderDate).getTime() <= 7 * 86400000).length;
   const shippedWithDates = orders.filter((order) => order.shipDate && Number.isFinite(new Date(order.orderDate).getTime()) && Number.isFinite(new Date(order.shipDate).getTime()));
   const averageOrderToShip = shippedWithDates.length ? shippedWithDates.reduce((total, order) => total + Math.max(0, (new Date(order.shipDate!).getTime() - new Date(order.orderDate).getTime()) / 86400000), 0) / shippedWithDates.length : null;
-  const pipelineOrders = counts.pending + ordersInProduction;
+  const ordersAwaitingProduction = Math.max(0, counts.pending - ordersInProduction);
+  const pipelineOrders = counts.pending;
 
   return (
     <main className="dashboard">
@@ -268,8 +273,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
         <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span className="section-icon"><PackageOpen size={18}/></span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
         <section className="metrics-grid">
-          <article className="metric"><div className="metric-heading"><span className="metric-icon amber"><PackageOpen size={23}/></span><p>Orders pending</p></div><div className="metric-value"><strong>{counts.pending}</strong><small>Ready for production</small></div></article>
-          <article className="metric production-metric"><div className="metric-heading"><span className="metric-icon violet"><Factory size={23}/></span><p>In production</p></div><div className="metric-value"><strong>{ordersInProduction}</strong><small>Currently being produced</small>{session.role === "admin" && view === "admin" && <div className="production-adjust"><input aria-label="Orders currently in production" type="number" min="0" step="1" value={productionDraft} onChange={(event) => setProductionDraft(event.target.value)}/><button type="button" onClick={saveProductionCount} disabled={productionSaving}>{productionSaving ? "Saving…" : "Set"}</button></div>}</div></article>
+          <article className="metric"><div className="metric-heading"><span className="metric-icon amber"><PackageOpen size={23}/></span><p>Orders awaiting production</p></div><div className="metric-value"><strong>{ordersAwaitingProduction}</strong><small>Ready for production</small></div></article>
+          <article className="metric production-metric"><div className="metric-heading"><span className="metric-icon violet"><Factory size={23}/></span><p>Orders in production</p></div><div className="metric-value"><strong>{ordersInProduction}</strong><small>Currently being produced</small>{session.role === "admin" && view === "admin" && <div className="production-adjust"><input aria-label="Orders currently in production" type="number" min="0" max={counts.pending} step="1" value={productionDraft} onChange={(event) => setProductionDraft(event.target.value)}/><button type="button" onClick={saveProductionCount} disabled={productionSaving}>{productionSaving ? "Saving…" : "Set"}</button></div>}</div></article>
           <article className="metric"><div className="metric-heading"><span className="metric-icon blue"><Truck size={23}/></span><p>Orders shipped</p></div><div className="metric-value"><strong>{counts.shipped}</strong><small>In carrier network</small></div></article>
           <article className="metric"><div className="metric-heading"><span className="metric-icon green"><PackageCheck size={23}/></span><p>Orders delivered</p></div><div className="metric-value"><strong>{counts.delivered}</strong><small>Successfully completed</small></div></article>
           <article className="metric"><div className="metric-heading"><span className="metric-icon violet"><TrendingUp size={23}/></span><p>Total units</p></div><div className="metric-value"><strong>{counts.units}</strong><small>Across visible orders</small></div></article>
