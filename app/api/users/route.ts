@@ -1,18 +1,21 @@
-import { getPortalSession, hashPin } from "@/lib/auth";
+import { getPortalSession, hashPin, verifyPin } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
   const session = await getPortalSession();
-  if (session?.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+  if (session?.role !== "admin" || session.mustChangePin) return Response.json({ error: "Admin access required." }, { status: 403 });
   const { data, error } = await getSupabaseAdmin().from("marsh_portal_users").select("id,display_name,email,role,active,must_change_pin,last_login,login_count,created_at").order("display_name");
   return error ? Response.json({ error: error.message }, { status: 400 }) : Response.json({ users: data });
 }
 
 export async function POST(request: Request) {
   const session = await getPortalSession();
-  if (session?.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+  if (session?.role !== "admin" || session.mustChangePin) return Response.json({ error: "Admin access required." }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   if (typeof body.name !== "string" || body.name.trim().length < 2 || !["admin","partner"].includes(body.role) || !/^\d{4,8}$/.test(body.pin ?? "")) return Response.json({ error: "Enter a name, role, and unique 4–8 digit PIN." }, { status: 400 });
+  const { data: existing, error: lookupError } = await getSupabaseAdmin().from("marsh_portal_users").select("pin_salt,pin_hash").eq("active",true);
+  if (lookupError) return Response.json({error:"Could not verify PIN availability. Please retry."},{status:500});
+  if (existing?.some(user=>verifyPin(body.pin,user.pin_salt,user.pin_hash))) return Response.json({error:"That PIN is already assigned. Choose another PIN."},{status:409});
   const { salt, hash } = hashPin(body.pin);
   const password = typeof body.password === "string" && body.password.length >= 8 ? hashPin(body.password) : null;
   const { error } = await getSupabaseAdmin().from("marsh_portal_users").insert({ display_name: body.name.trim(), email: typeof body.email === "string" && body.email.includes("@") ? body.email.trim().toLowerCase() : null, role: body.role, pin_salt: salt, pin_hash: hash, password_salt:password?.salt ?? null, password_hash:password?.hash ?? null, must_change_pin:true });
@@ -21,7 +24,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const session = await getPortalSession();
-  if (session?.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+  if (session?.role !== "admin" || session.mustChangePin) return Response.json({ error: "Admin access required." }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   if (typeof body.userId !== "string" || typeof body.email !== "string" || !body.email.includes("@") || typeof body.password !== "string" || body.password.length < 8) return Response.json({ error: "Enter a valid email and a temporary password of at least 8 characters." }, { status: 400 });
   const password = hashPin(body.password);

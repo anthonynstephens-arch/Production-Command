@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Users } from "lucide-react";
 
-type PortalUser = { id: string; display_name: string; last_login: string | null; timeZone: string; location: string };
+type PortalUser = { id: string; display_name: string; last_login: string | null; login_count: number; timeZone: string; location: string };
 
 function timeAgo(timestamp: string, now: number) {
   const elapsed = Math.max(0, now - new Date(timestamp).getTime());
@@ -38,15 +38,17 @@ export default function PortalAccess() {
       }
     }
     void load();
-    return () => { stopped = true; clearTimeout(timer); };
+    const refresh = () => { clearTimeout(timer); void load(); };
+    window.addEventListener("portal-users-updated", refresh);
+    return () => { stopped = true; clearTimeout(timer); window.removeEventListener("portal-users-updated", refresh); };
   }, []);
   return <section className="panel portal-access-panel" aria-labelledby="portal-access-title">
-    <div className="access-heading"><div className="icon-box"><Users size={20}/></div><div><h2 id="portal-access-title">Portal access granted to</h2><p>Last login activity.</p></div></div>
+    <div className="access-heading"><div className="icon-box"><Users size={20}/></div><div><h2 id="portal-access-title">Portal access granted to</h2><p>Total logins and most recent sign-in.</p></div></div>
     {error && <p role="alert">{error}</p>}
     {loading ? <p>Loading portal access…</p> : <div className="portal-access-grid">{users.map(user => <article className="portal-access-person" key={user.id}>
       <div className="portal-access-identity"><strong>{user.display_name}</strong><span className="portal-access-location">{user.location}</span></div>
-      <div className="portal-access-login"><span className="portal-access-label">Last login</span>
-      {user.last_login ? <time dateTime={user.last_login}>{timeAgo(user.last_login, now)}</time> : <span>Not signed in yet</span>}</div>
+      <div className="portal-access-login"><span className="portal-access-label">Total logins</span><strong>{(user.login_count??0).toLocaleString()}</strong></div><div className="portal-access-login"><span className="portal-access-label">Last login</span>
+      {user.last_login ? <time dateTime={user.last_login}>{new Date(user.last_login).toLocaleString("en-US", {timeZone:user.timeZone,month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}<small>{timeAgo(user.last_login, now)}</small></time> : <span>Not signed in yet</span>}</div>
     </article>)}</div>}
   </section>;
 }

@@ -1,4 +1,4 @@
-import { getPortalSession, hashPin, setPortalSession } from "@/lib/auth";
+import { getPortalSession, hashPin, verifyPin, setPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: Request) {
@@ -6,6 +6,9 @@ export async function POST(request: Request) {
   if (!session) return Response.json({ error: "Sign in first." }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   if (!/^\d{4,8}$/.test(body.pin ?? "")) return Response.json({ error: "Choose a 4–8 digit PIN." }, { status: 400 });
+  const { data: existing, error: lookupError } = await getSupabaseAdmin().from("marsh_portal_users").select("pin_salt,pin_hash").eq("active",true).neq("id",session.userId);
+  if (lookupError) return Response.json({error:"Could not verify PIN availability. Please retry."},{status:500});
+  if (existing?.some(user=>verifyPin(body.pin,user.pin_salt,user.pin_hash))) return Response.json({error:"That PIN is already assigned. Choose another PIN."},{status:409});
   const { salt, hash } = hashPin(body.pin);
   const { error } = await getSupabaseAdmin().from("marsh_portal_users").update({ pin_salt:salt, pin_hash:hash, must_change_pin:false }).eq("id",session.userId);
   if (error) return Response.json({ error:error.code === "23505" ? "That PIN is already assigned to another account." : error.message }, { status:400 });

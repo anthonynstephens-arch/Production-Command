@@ -13,7 +13,7 @@ export async function GET() {
   const session = await getPortalSession();
   if (!session || session.mustChangePin) return Response.json({ error: "Please sign in to view portal access." }, { status: 401 });
   const { data, error } = await getSupabaseAdmin().from("marsh_portal_users")
-    .select("id,display_name,last_login").eq("active", true).order("display_name");
+    .select("id,display_name,last_login,login_count").eq("active", true).order("display_name");
   if (error) return Response.json({ error: "Could not load portal access. Please retry." }, { status: 500 });
   return Response.json({ users: data.map(user => ({ ...user, ...(locations[user.id] || { timeZone: "UTC", location: "UTC" }) })) }, { headers: { "Cache-Control": "no-store" } });
 }
