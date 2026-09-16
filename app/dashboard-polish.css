@@ -243,3 +243,5 @@
 .notification-test{border:1px solid #cbd5e1;border-radius:8px;background:#f0f4fa;color:#234f89;padding:9px 12px;font:inherit;font-size:14px;cursor:pointer}
 
 .notification-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
+
+.operations-form .payment-request-option{display:flex;align-items:flex-start;gap:10px;padding:13px;border:1px solid #b7d9cd;border-radius:10px;background:#f0f8f4;cursor:pointer}.operations-form .payment-request-option input{width:18px;height:18px;min-width:18px;margin:2px 0 0;accent-color:var(--accent)}.payment-request-option span{display:grid;gap:5px}.payment-request-option strong{font-size:.86rem}.payment-request-option small{font-weight:400;line-height:1.45;color:var(--muted)}.payment-request-success{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:14px;border-radius:10px;background:#eaf7ef;color:#166344;font-size:.86rem;line-height:1.5}.payment-request-success svg{flex-shrink:0;margin-top:2px}.delivery-details .delivery-payment-request{color:#166344;font-size:.75rem;font-weight:650}

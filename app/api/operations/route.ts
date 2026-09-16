@@ -1,10 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { getPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { lookupInboundTracking } from "@/lib/inbound-tracking";
 
+const paymentRecipientId = "3d420e57-2793-4853-a3f6-e3ce1b73f847";
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET() {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const db = getSupabaseAdmin();
   const [payments, deliveries, charges] = await Promise.all([
     db.from("marsh_payments").select("*").order("created_at", { ascending: false }).limit(50),
@@ -17,7 +21,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const db = getSupabaseAdmin();
   if (body.type === "payment") {
@@ -39,17 +43,32 @@ export async function POST(request: Request) {
     const supplyType=supplyTypes.includes(body.supplyType)?body.supplyType:"";
     const quantity=Number(body.quantity);
     if(!supplyType||!Number.isFinite(quantity)||quantity<=0) return Response.json({error:"Choose a supply type and enter a valid quantity."},{status:400});
+    const requestPayment = body.requestPayment === true;
+    if (requestPayment && supplyType !== "mats") return Response.json({error:"Payment requests are only available for blank mats."},{status:400});
+    if (requestPayment && session.userId === paymentRecipientId) return Response.json({error:"Please record your payment directly instead of requesting payment from yourself."},{status:400});
+    const deliveryId = body.deliveryId || randomUUID();
+    if (typeof deliveryId !== "string" || !uuid.test(deliveryId)) return Response.json({error:"Invalid delivery reference."},{status:400});
+    if (requestPayment) {
+      const {data:recipient,error:recipientError} = await db.from("marsh_portal_users").select("id").eq("id",paymentRecipientId).eq("active",true).maybeSingle();
+      if (recipientError || !recipient) return Response.json({error:"Marcel's account is unavailable. Uncheck the payment request option to record payment yourself, or try again later."},{status:503});
+    }
     const supplyLabels:Record<string,string>={mats:"Blank coir mats",boxes:"Shipping boxes",tape:"Packing tape rolls",thankYouCards:"Thank-you cards",polyBags:"Poly bags",ink:"Black ink"};
     const trackingNumber=String(body.trackingNumber).trim().slice(0,120);
     const tracking=await lookupInboundTracking(trackingNumber,String(body.carrier||"Other"));
-    const { error } = await db.from("marsh_incoming_deliveries").insert({
+    const { data:saved, error } = await db.from("marsh_incoming_deliveries").insert({
+      id:deliveryId, payment_requested_to:requestPayment ? paymentRecipientId : null,
       description:supplyLabels[supplyType], supplier:null, supply_type:supplyType, quantity,
       carrier:tracking.carrier, tracking_number:trackingNumber, tracking_url:tracking.trackingUrl||null, tracking_provider:tracking.slug,
       eta_start:tracking.etaStart, eta_end:tracking.etaEnd, status:tracking.status, tracking_message:tracking.message, last_tracking_check:new Date().toISOString(),
       submitted_by: session.userId, submitted_by_name: session.name,
-    });
-    if (error) return Response.json({ error: "Could not save the delivery." }, { status: 500 });
-    return Response.json({ ok: true });
+    }).select("id,payment_requested_to,payment_request_amount").single();
+    if (error?.code === "23505") {
+      const {data:existing} = await db.from("marsh_incoming_deliveries").select("id,supply_type,quantity,tracking_number,payment_requested_to,payment_request_amount").eq("id",deliveryId).eq("submitted_by",session.userId).maybeSingle();
+      if (existing && existing.supply_type===supplyType && Number(existing.quantity)===quantity && existing.tracking_number===trackingNumber && existing.payment_requested_to===(requestPayment?paymentRecipientId:null)) return Response.json({ok:true,paymentRequested:!!existing.payment_requested_to,deliveryId:existing.id});
+      return Response.json({error:"This delivery reference was already used. Refresh before entering another delivery."},{status:409});
+    }
+    if (error) return Response.json({ error: requestPayment ? "The delivery and payment request were not saved. Please retry." : "Could not save the delivery." }, { status: 500 });
+    return Response.json({ ok: true, paymentRequested:!!saved.payment_requested_to,deliveryId:saved.id });
   }
   if (body.type === "charge") {
     if (!session.canCreateCharges) return Response.json({ error: "Admin access required." }, { status: 403 });
@@ -66,7 +85,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const db = getSupabaseAdmin();
   if (body.type === "confirm_payment") {
@@ -103,7 +122,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (session.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const id = String(body.id || "");
