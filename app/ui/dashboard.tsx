@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Boxes, Box, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X, Factory } from "lucide-react";
+import { Boxes, Box, ChevronDown, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X, Factory } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
@@ -70,6 +70,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [productionDraft, setProductionDraft] = useState("0");
   const [productionSaving, setProductionSaving] = useState(false);
   const [balanceOwed, setBalanceOwed] = useState(0);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const loadInventory = async () => {
     const response = await fetch("/api/inventory", { cache: "no-store" });
@@ -197,7 +198,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     return totals;
   }, [orders]);
 
-  const filtered = orders.filter((order) => (filter === "all" || order.status === filter) && `${order.orderNumber} ${order.customer} ${order.item}`.toLowerCase().includes(query.toLowerCase()));
+  const filtered = orders.filter((order) => (filter === "all" || order.status === filter) && `${order.orderNumber} ${order.customer} ${order.item} ${order.items?.map(item=>item.name).join(" ") ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const committedUnits = orders.filter((order) => order.status === "pending").reduce((sum, order) => sum + order.quantity, 0);
   const availableMats = Math.max(0, supplies.mats - committedUnits);
   const availableBoxes = Math.max(0, supplies.boxes - committedUnits);
@@ -296,7 +297,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         <div id="operations"><FinancialLogistics session={{...session, canCreateCharges: session.canCreateCharges && view === "admin"}} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply} onBalanceChange={setBalanceOwed}/></div>
 
         <section className="panel orders-panel" id="order-queue"><div className="orders-head"><div><p className="eyebrow">ORDER ACTIVITY</p><h2>Fulfillment queue</h2></div><div className="table-actions"><label className="search"><Search size={16}/><input aria-label="Search fulfillment orders" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search orders" /></label><select aria-label="Filter by order status" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option></select></div></div>
-          <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => <tr key={order.id}><td data-label="Order"><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></td><td data-label="Customer">{order.customer}</td><td data-label="Product" className="product-cell">{order.item}</td><td data-label="Quantity">{order.quantity}</td><td data-label="Status"><StatusBadge status={order.status}/></td><td data-label="Tracking">{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td data-label="Date">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
+          <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => {const expanded=expandedOrderId===order.id;const lineItems=order.items?.length?order.items:[{name:order.item,quantity:order.quantity}];return <Fragment key={order.id}><tr className={`order-row${expanded?" expanded":""}`} onClick={()=>setExpandedOrderId(expanded?null:order.id)}><td data-label="Order"><button className="order-expand" type="button" aria-expanded={expanded} aria-controls={`order-items-${order.id}`} onClick={event=>{event.stopPropagation();setExpandedOrderId(expanded?null:order.id)}}><ChevronDown size={16}/><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></button></td><td data-label="Customer">{order.customer}</td><td data-label="Product" className="product-cell">{lineItems.length>1?`${lineItems.length} line items`:order.item}</td><td data-label="Quantity">{order.quantity}</td><td data-label="Status"><StatusBadge status={order.status}/></td><td data-label="Tracking">{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td data-label="Date">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>{expanded&&<tr className="order-detail-row" id={`order-items-${order.id}`}><td colSpan={7}><div className="order-detail"><div className="order-detail-heading"><strong>Items in {displayOrderNumber(order.orderNumber)}</strong><span>{lineItems.length} {lineItems.length===1?"line item":"line items"} · {order.quantity} total {order.quantity===1?"unit":"units"}</span></div><ul>{lineItems.map((item,index)=><li key={`${item.name}-${index}`}><span>{item.name}</span><strong>Qty {item.quantity}</strong></li>)}</ul></div></td></tr>}</Fragment>})}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
           <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>{lastSync ? `Last successful refresh: ${lastSync}` : "Loaded with page"}</span></footer>
         </section>
         <PortalAccess/>
