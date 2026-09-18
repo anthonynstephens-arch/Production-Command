@@ -9,6 +9,10 @@ export type PortalOrder = {
   shipDate?: string;
   trackingNumber?: string;
   carrier?: string;
+  service?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  shippingAddress?: { name?: string; company?: string; street1?: string; street2?: string; street3?: string; city?: string; state?: string; postalCode?: string; country?: string };
   items?: Array<{ name: string; quantity: number }>;
 };
 
@@ -16,7 +20,7 @@ type ShipStationOrder = {
   order_id?: string;
   order_number?: string;
   order_status?: string;
-  ship_to?: { name?: string };
+  ship_to?: { name?: string; company_name?: string; address_line1?: string; address_line2?: string; address_line3?: string; city_locality?: string; state_province?: string; postal_code?: string; country_code?: string; phone?: string; email?: string };
   bill_to?: { name?: string };
   customer_name?: string;
   items?: Array<{ name?: string; quantity?: number }>;
@@ -25,19 +29,25 @@ type ShipStationOrder = {
   shipped_at?: string;
   tracking_number?: string;
   carrier_code?: string;
+  service_code?: string;
+  customer_email?: string;
 };
+
+type LegacyAddress = { name?: string; company?: string; street1?: string; street2?: string; street3?: string; city?: string; state?: string; postalCode?: string; country?: string; phone?: string; residential?: boolean };
 
 type LegacyShipStationOrder = {
   orderId?: number;
   orderNumber?: string;
   orderStatus?: string;
   customerName?: string;
-  shipTo?: { name?: string };
+  shipTo?: LegacyAddress;
   billTo?: { name?: string };
   orderDate?: string;
   shipDate?: string;
   trackingNumber?: string;
   carrierCode?: string;
+  serviceCode?: string;
+  customerEmail?: string;
   items?: Array<{ name?: string; quantity?: number }>;
 };
 
@@ -49,6 +59,7 @@ type LegacyShipStationShipment = {
   createDate?: string;
   trackingNumber?: string;
   carrierCode?: string;
+  serviceCode?: string;
   voided?: boolean;
 };
 
@@ -116,7 +127,8 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
           item: items.map(item => item.name).join(", ") || "Marsh Supply order",
           quantity: items.reduce((sum, item) => sum + item.quantity, 0),
           status: normalizeStatus(order.orderStatus, shipDate, trackingNumber, Boolean(shipment)), orderDate: order.orderDate ?? new Date().toISOString(), shipDate,
-          trackingNumber, carrier: carrier?.toUpperCase(), items,
+          trackingNumber, carrier: carrier?.toUpperCase(), service: shipment?.serviceCode || order.serviceCode, customerEmail: order.customerEmail, customerPhone: order.shipTo?.phone,
+          shippingAddress: order.shipTo ? { name: order.shipTo.name, company: order.shipTo.company, street1: order.shipTo.street1, street2: order.shipTo.street2, street3: order.shipTo.street3, city: order.shipTo.city, state: order.shipTo.state, postalCode: order.shipTo.postalCode, country: order.shipTo.country } : undefined, items,
         };
       });
       return { orders, connected: true, message: "Connected to ShipStation orders." };
@@ -137,7 +149,8 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
           item: items.map(item => item.name).join(", ") || "Marsh Supply order",
           quantity: items.reduce((sum, item) => sum + item.quantity, 0),
           status: normalizeStatus(order.order_status, order.shipped_at, order.tracking_number), orderDate: order.ordered_at ?? order.created_at ?? new Date().toISOString(), shipDate: order.shipped_at,
-          trackingNumber: order.tracking_number, carrier: order.carrier_code?.toUpperCase(), items,
+          trackingNumber: order.tracking_number, carrier: order.carrier_code?.toUpperCase(), service: order.service_code, customerEmail: order.customer_email || order.ship_to?.email, customerPhone: order.ship_to?.phone,
+          shippingAddress: order.ship_to ? { name: order.ship_to.name, company: order.ship_to.company_name, street1: order.ship_to.address_line1, street2: order.ship_to.address_line2, street3: order.ship_to.address_line3, city: order.ship_to.city_locality, state: order.ship_to.state_province, postalCode: order.ship_to.postal_code, country: order.ship_to.country_code } : undefined, items,
         };
       });
       return { orders, connected: true, message: "Connected to ShipStation orders." };

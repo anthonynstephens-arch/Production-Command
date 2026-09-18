@@ -20,8 +20,10 @@ export async function POST(request: Request) {
   const reason = String(body.reason || "");
   const note = String(body.note || "").trim().slice(0, 1000) || null;
   if (!orderId || !orderNumber || !reasons.has(reason)) return Response.json({ error: "Choose a valid issue reason." }, { status: 400 });
-  const { data, error } = await getSupabaseAdmin().from("marsh_order_issues").upsert({ account_slug: ACCOUNT_SLUG, order_id: orderId, order_number: orderNumber, reason, note, created_by_name: session.name, created_at: new Date().toISOString(), resolved_at: null, resolved_by_name: null }, { onConflict: "account_slug,order_id" }).select("*").single();
+  const db = getSupabaseAdmin();
+  const { data, error } = await db.from("marsh_order_issues").upsert({ account_slug: ACCOUNT_SLUG, order_id: orderId, order_number: orderNumber, reason, note, created_by_name: session.name, created_at: new Date().toISOString(), resolved_at: null, resolved_by_name: null }, { onConflict: "account_slug,order_id" }).select("*").single();
   if (error) return Response.json({ error: "Could not flag this order." }, { status: 500 });
+  await db.rpc("enqueue_marsh_notification", { event_key: `shipping-issue:${orderId}:${Date.now()}`, event_kind: "shipping_issue", category: "shipping_issues", event_payload: { order_id: orderId, order_number: orderNumber, reason, note, reported_by: session.name, title: `Shipping issue: ${orderNumber}`, body: `${reason}${note ? ` — ${note}` : ""}`, target_url: "https://production-command-six.vercel.app/#order-queue" }, exclude_user: session.userId });
   return Response.json({ issue: data });
 }
 
