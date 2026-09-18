@@ -872,6 +872,14 @@ export default function Dashboard({
           <a href="#mat-sales">Mat sales</a>
           <a href="#operations">Payments & deliveries</a>
           <a href="#order-queue">Fulfillment queue</a>
+          <a
+            href="/marsh-service-agreement.pdf"
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Service Agreement
+          </a>
         </nav>
         <section className="overview-summary">
           <div className="overview-topline">
