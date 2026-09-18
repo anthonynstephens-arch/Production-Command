@@ -15,7 +15,7 @@ export async function POST(request:Request){
  try{const parsed=new URL(targetUrl);if(parsed.origin!==appOrigin)targetUrl=appOrigin;}catch{targetUrl=appOrigin;}
  if(!title||!body)return Response.json({error:'Enter a subject and message.'},{status:400});
  const db=getSupabaseAdmin(),eventId=`broadcast:${randomUUID()}`;
- const {data:users,error}=await db.from('marsh_portal_users').select('id').eq('active',true).eq('must_change_pin',false);
+ const {data:users,error}=await db.from('marsh_portal_users').select('id').eq('active',true);
  if(error)return Response.json({error:'Could not load portal users.'},{status:500});
  const ids=(users??[]).map(user=>user.id);
  if(!ids.length)return Response.json({error:'No active users are ready for notifications.'},{status:400});
