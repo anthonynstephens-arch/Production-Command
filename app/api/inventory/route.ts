@@ -44,7 +44,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const shipments = Array.isArray(body.shipments) ? body.shipments.slice(0, 500).map((shipment: unknown) => {
     const record = shipment && typeof shipment === "object" ? shipment as Record<string, unknown> : {};
-    return { id: String(record.id || "").slice(0, 160), units: Math.max(0, Math.trunc(Number(record.units) || 0)) };
+    const designs = Array.isArray(record.designs) ? record.designs.slice(0, 20).map((design: unknown) => {
+      const item = design && typeof design === "object" ? design as Record<string, unknown> : {};
+      return { key: String(item.key || "").slice(0, 80), quantity: Math.max(0, Math.trunc(Number(item.quantity) || 0)) };
+    }).filter((design: { key: string; quantity: number }) => design.key && design.quantity > 0) : [];
+    return { id: String(record.id || "").slice(0, 160), units: Math.max(0, Math.trunc(Number(record.units) || 0)), designs };
   }).filter((shipment: { id: string; units: number }) => shipment.id && shipment.units > 0) : [];
 
   if (!shipments.length) return Response.json({ ok: true, processedShipments: 0, processedUnits: 0 });

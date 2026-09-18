@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Boxes, Box, ChevronDown, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X, Factory } from "lucide-react";
+import { Boxes, Box, ChevronDown, Droplets, PackageCheck, PackageOpen, RefreshCw, Search, Settings2, ShieldCheck, Truck, TrendingUp, AlertTriangle, ExternalLink, Package, Mail, ShoppingBag, RectangleHorizontal, Menu, X, Factory, Flag, CircleCheck } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
@@ -15,6 +15,8 @@ import Messenger from "./messenger";
 type Supply = { mats: number; boxes: number; ink: number; tape: number; tapeCoverage: number; tapeUsage: number; thankYouCards: number; polyBags: number };
 type SupplyKey = "mats" | "boxes" | "ink" | "tape" | "thankYouCards" | "polyBags";
 type Props = { initialOrders: PortalOrder[]; initialConnected: boolean; initialMessage?: string; session: PortalSession };
+type OrderIssue = { order_id: string; order_number: string; reason: string; note: string | null; created_by_name: string; created_at: string };
+type FinishedMat = { design_key: string; design_name: string; quantity: number; updated_at: string };
 
 const defaults: Supply = { mats: 250, boxes: 250, ink: 82, tape: 24, tapeCoverage: 25, tapeUsage: 0, thankYouCards: 250, polyBags: 250 };
 
@@ -52,6 +54,15 @@ function displayOrderNumber(orderNumber: string) {
   return /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(orderNumber) ? `#${orderNumber.slice(0, 8).toUpperCase()}` : orderNumber;
 }
 
+function designKey(name: string) {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("did you call")) return "did-you-call-first";
+  if (normalized.includes("upside down") || normalized.includes("upside-down")) return "upside-down-welcome";
+  if (normalized.includes("whatupdoe") || normalized.includes("what up doe")) return "whatupdoe";
+  if (normalized.includes("marsh supply") || normalized.includes("marsh")) return "marsh-supply";
+  return null;
+}
+
 export default function Dashboard({ initialOrders, initialConnected, initialMessage, session }: Props) {
   const router = useRouter();
   const [supplies, setSupplies] = useState<Supply>(defaults);
@@ -71,6 +82,14 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const [productionSaving, setProductionSaving] = useState(false);
   const [balanceOwed, setBalanceOwed] = useState(0);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [orderIssues, setOrderIssues] = useState<OrderIssue[]>([]);
+  const [issueReason, setIssueReason] = useState("Incomplete address");
+  const [issueNote, setIssueNote] = useState("");
+  const [issueSaving, setIssueSaving] = useState(false);
+  const [finishedMats, setFinishedMats] = useState<FinishedMat[]>([]);
+  const [printBatch, setPrintBatch] = useState({ designKey: "whatupdoe", quantity: "" });
+  const [printSaving, setPrintSaving] = useState(false);
+  const [printMessage, setPrintMessage] = useState("");
 
   const loadInventory = async () => {
     const response = await fetch("/api/inventory", { cache: "no-store" });
@@ -85,6 +104,18 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     const timer = window.setInterval(refresh, 15000);
     window.addEventListener("focus", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, []);
+
+  const loadOperationalData = async () => {
+    const [issuesResponse, matsResponse] = await Promise.all([fetch("/api/order-issues", { cache: "no-store" }), fetch("/api/finished-mats", { cache: "no-store" })]);
+    if (issuesResponse.ok) setOrderIssues((await issuesResponse.json()).issues ?? []);
+    if (matsResponse.ok) setFinishedMats((await matsResponse.json()).designs ?? []);
+  };
+
+  useEffect(() => {
+    loadOperationalData().catch(() => {});
+    const timer = window.setInterval(() => loadOperationalData().catch(() => {}), 15000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -119,8 +150,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
     if (!shippedOrders.length) return;
     let cancelled = false;
     const applyShipmentUsage = async () => {
-      const response = await fetch("/api/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipments: shippedOrders.map(order => ({ id: order.id, units: order.quantity })) }) });
-      if (response.ok && !cancelled) await loadInventory();
+      const response = await fetch("/api/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipments: shippedOrders.map(order => ({ id: order.id, units: order.quantity, designs: (order.items?.length ? order.items : [{ name: order.item, quantity: order.quantity }]).flatMap(item => { const key = designKey(item.name); return key ? [{ key, quantity: item.quantity }] : []; }) })) }) });
+      if (response.ok && !cancelled) { await loadInventory(); await loadOperationalData(); }
     };
     applyShipmentUsage().catch(() => {});
     return () => { cancelled = true; };
@@ -136,6 +167,30 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   const receiveSupply = async (key: SupplyKey, quantity: number) => {
     const nextValue = key === "ink" ? Math.min(100, supplies[key] + quantity) : supplies[key] + quantity;
     await setSupply(key, nextValue);
+  };
+
+  const flagOrder = async (order: PortalOrder) => {
+    setIssueSaving(true);
+    try {
+      const response = await fetch("/api/order-issues", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, orderNumber: order.orderNumber, reason: issueReason, note: issueNote }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not flag order.");
+      setIssueNote(""); await loadOperationalData();
+    } finally { setIssueSaving(false); }
+  };
+  const resolveIssue = async (orderId: string) => {
+    setIssueSaving(true);
+    try { await fetch(`/api/order-issues?orderId=${encodeURIComponent(orderId)}`, { method: "DELETE" }); await loadOperationalData(); }
+    finally { setIssueSaving(false); }
+  };
+  const recordPrintBatch = async () => {
+    setPrintSaving(true); setPrintMessage("");
+    try {
+      const response = await fetch("/api/finished-mats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(printBatch) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not record print run.");
+      setPrintBatch(current => ({ ...current, quantity: "" })); setPrintMessage("Printed mats added and blank inventory reduced."); await Promise.all([loadInventory(), loadOperationalData()]);
+    } catch (error) { setPrintMessage(error instanceof Error ? error.message : "Could not record print run."); }
+    finally { setPrintSaving(false); }
   };
 
   const sync = async () => {
@@ -198,6 +253,8 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   ];
   const largestMatTotal = Math.max(1, ...matSales.map((design) => design.value));
   const matSalesTotal = matSales.reduce((sum, design) => sum + design.value, 0);
+  const pendingByDesign = orders.filter(order => order.status === "pending").reduce<Record<string, number>>((totals, order) => { for (const item of (order.items?.length ? order.items : [{ name: order.item, quantity: order.quantity }])) { const key = designKey(item.name); if (key) totals[key] = (totals[key] || 0) + item.quantity; } return totals; }, {});
+  const finishedMatCards = finishedMats.map(item => ({ ...item, committed: Math.min(item.quantity, pendingByDesign[item.design_key] || 0), available: Math.max(0, item.quantity - (pendingByDesign[item.design_key] || 0)) }));
   const capacityBlockers = [
     { label: "blank coir mats", available: availableMats },
     { label: "shipping boxes", available: availableBoxes },
@@ -237,7 +294,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
 
       <div className="page-shell"><div className="notification-toolbar"><NotificationSettings/></div>
         <nav className="dashboard-nav" aria-label="Dashboard sections">{session.role === "admin" && <a href="#portal-users" onClick={()=>{setView("admin");setMobileMenuOpen(false)}}>Manage users</a>}<a href="#inventory">Inventory</a><a href="#pipeline">Orders & capacity</a><a href="#mat-sales">Mat sales</a><a href="#operations">Payments & deliveries</a><a href="#order-queue">Fulfillment queue</a></nav>
-        <section className="overview-summary"><div className="overview-topline"><p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>{session.role === "admin" && <button className="sync-button page-sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}</div>{balanceOwed>0&&<a className="summary-copy balance-alert" href="#operations"><AlertTriangle size={19}/><span><strong>Payment due: ${balanceOwed.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> remains outstanding on the payment ledger. View charges and recorded payments.</span></a>}<p className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`}>{lowSupplyNames.length ? <><AlertTriangle size={19}/><span><strong>Purchasing recommended:</strong> Replenish {lowSupplyNames.join(", ")} to keep fulfillment moving. Current supplies support approximately <strong>{availableCapacity} additional orders</strong> after commitments.</span></> : <><PackageCheck size={19}/><span><strong>Inventory is ready.</strong> Current supplies support approximately {availableCapacity} additional orders after commitments.</span></>}</p><div className="summary-stats"><div><span>Pipeline</span><strong>{pipelineOrders} orders</strong></div><div><span>New in 7 days</span><strong>{newOrdersThisWeek}</strong></div><div><span>Avg. order to ship</span><strong>{averageOrderToShip === null ? "Not enough data" : `${averageOrderToShip.toFixed(1)} days`}</strong></div><div><span>Available capacity</span><strong>{availableCapacity} orders</strong></div></div></section>
+        <section className="overview-summary"><div className="overview-topline"><p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>{session.role === "admin" && <button className="sync-button page-sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing ? "spin" : ""}/>{syncing ? "Syncing…" : "Sync ShipStation"}</button>}</div>{orderIssues.length>0&&<a className="summary-copy order-issue-alert" href="#order-queue"><Flag size={19}/><span><strong>{orderIssues.length} {orderIssues.length===1?"order is":"orders are"} unable to ship.</strong> Review and resolve the flagged fulfillment issues.</span></a>}{balanceOwed>0&&<a className="summary-copy balance-alert" href="#operations"><AlertTriangle size={19}/><span><strong>Payment due: ${balanceOwed.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> remains outstanding on the payment ledger. View charges and recorded payments.</span></a>}<p className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`}>{lowSupplyNames.length ? <><AlertTriangle size={19}/><span><strong>Purchasing recommended:</strong> Replenish {lowSupplyNames.join(", ")} to keep fulfillment moving. Current supplies support approximately <strong>{availableCapacity} additional orders</strong> after commitments.</span></> : <><PackageCheck size={19}/><span><strong>Inventory is ready.</strong> Current supplies support approximately {availableCapacity} additional orders after commitments.</span></>}</p><div className="summary-stats"><div><span>Pipeline</span><strong>{pipelineOrders} orders</strong></div><div><span>Shipping issues</span><strong>{orderIssues.length}</strong></div><div><span>New in 7 days</span><strong>{newOrdersThisWeek}</strong></div><div><span>Available capacity</span><strong>{availableCapacity} orders</strong></div></div></section>
 
         <div className="sync-feedback" role="status" aria-live="polite">{syncing ? "Checking ShipStation for updates…" : syncError ? <span className="sync-error">{syncError} Displayed orders have not been replaced.</span> : lastSync ? `Orders refreshed at ${lastSync}.` : connected ? "ShipStation orders loaded with this page." : "Demo data · live orders unavailable"}</div>
         {!connected && <div className="setup-banner"><AlertTriangle size={18}/><div><strong>Live ShipStation data is not connected yet.</strong><span>{syncMessage ?? "Add the API key to activate order syncing."} Showing representative data until setup is completed.</span></div></div>}
@@ -250,6 +307,12 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
           <SupplyCard icon={<Mail size={21}/>} title="Thank-you cards" value={supplies.thankYouCards} unit="cards" detail="One reserved per pending mat" percent={supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4} committed={committedUnits} available={availableThankYouCards} incoming={incoming.thankYouCards} low={availableThankYouCards <= 0} admin={view === "admin"} onSet={(value) => setSupply("thankYouCards", value)} />
           <SupplyCard icon={<ShoppingBag size={21}/>} title="Poly bags" value={supplies.polyBags} unit="bags" detail="One reserved per pending mat" percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4} committed={committedUnits} available={availablePolyBags} incoming={incoming.polyBags} low={availablePolyBags <= 0} admin={view === "admin"} onSet={(value) => setSupply("polyBags", value)} />
           <SupplyCard icon={<Droplets size={21}/>} title="Ink supply" value={inkPercent} unit="%" detail={inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"} percent={inkPercent} incoming={incoming.ink} verticalMeter admin={view === "admin"} onSet={(value) => setSupply("ink", Math.min(100, value))} />
+        </section>
+
+        <div className="dashboard-section-heading" id="printed-mats"><div><span className="section-icon"><Factory size={18}/></span><h2>Printed Mats Ready for Orders</h2></div><p>Finished on hand · committed · available</p></div>
+        <section className="finished-mats-grid">
+          {finishedMatCards.map(mat => <article className="finished-mat-card" key={mat.design_key}><div><span>READY STOCK</span><h3>{mat.design_name}</h3></div><strong>{mat.quantity}</strong><div className="allocation"><div><span>Committed</span><b>{mat.committed}</b></div><div><span>Available</span><b>{mat.available}</b></div></div></article>)}
+          {view === "admin" && <article className="finished-mat-card print-batch-card"><div><span>RECORD PRODUCTION</span><h3>Add printed mats</h3></div><label>Design<select value={printBatch.designKey} onChange={event=>setPrintBatch({...printBatch,designKey:event.target.value})}>{finishedMats.map(mat=><option key={mat.design_key} value={mat.design_key}>{mat.design_name}</option>)}</select></label><label>Quantity printed<input type="number" min="1" max={supplies.mats} value={printBatch.quantity} onChange={event=>setPrintBatch({...printBatch,quantity:event.target.value})}/></label><button type="button" className="sync-button" disabled={printSaving||!printBatch.quantity} onClick={recordPrintBatch}>{printSaving?"Saving…":"Add finished batch"}</button>{printMessage&&<small role="status">{printMessage}</small>}<p>This transfers the quantity from blank mats into finished stock. It does not increase total mat inventory.</p></article>}
         </section>
 
         <div className="dashboard-section-heading pipeline-heading" id="pipeline"><div><span className="section-icon"><PackageOpen size={18}/></span><h2>Order Pipeline</h2></div><p>Current fulfillment movement at a glance</p></div>
@@ -277,7 +340,7 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
         <div id="operations"><FinancialLogistics session={{...session, canCreateCharges: session.canCreateCharges && view === "admin"}} onIncomingChange={setIncoming} onInventoryReceived={receiveSupply} onBalanceChange={setBalanceOwed}/></div>
 
         <section className="panel orders-panel" id="order-queue"><div className="orders-head"><div><p className="eyebrow">ORDER ACTIVITY</p><h2>Fulfillment queue</h2></div><div className="table-actions"><label className="search"><Search size={16}/><input aria-label="Search fulfillment orders" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search orders" /></label><select aria-label="Filter by order status" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option></select></div></div>
-          <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => {const expanded=expandedOrderId===order.id;const lineItems=order.items?.length?order.items:[{name:order.item,quantity:order.quantity}];return <Fragment key={order.id}><tr className={`order-row${expanded?" expanded":""}`} onClick={()=>setExpandedOrderId(expanded?null:order.id)}><td data-label="Order"><button className="order-expand" type="button" aria-expanded={expanded} aria-controls={`order-items-${order.id}`} onClick={event=>{event.stopPropagation();setExpandedOrderId(expanded?null:order.id)}}><ChevronDown size={16}/><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong></button></td><td data-label="Customer">{order.customer}</td><td data-label="Product" className="product-cell">{lineItems.length>1?`${lineItems.length} line items`:order.item}</td><td data-label="Quantity">{order.quantity}</td><td data-label="Status"><StatusBadge status={order.status}/></td><td data-label="Tracking">{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td data-label="Date">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>{expanded&&<tr className="order-detail-row" id={`order-items-${order.id}`}><td colSpan={7}><div className="order-detail"><div className="order-detail-heading"><strong>Items in {displayOrderNumber(order.orderNumber)}</strong><span>{lineItems.length} {lineItems.length===1?"line item":"line items"} · {order.quantity} total {order.quantity===1?"unit":"units"}</span></div><ul>{lineItems.map((item,index)=><li key={`${item.name}-${index}`}><span>{item.name}</span><strong>Qty {item.quantity}</strong></li>)}</ul></div></td></tr>}</Fragment>})}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
+          <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Status</th><th>Tracking</th><th>Date</th></tr></thead><tbody>{filtered.map((order) => {const expanded=expandedOrderId===order.id;const lineItems=order.items?.length?order.items:[{name:order.item,quantity:order.quantity}];const issue=orderIssues.find(item=>item.order_id===order.id);return <Fragment key={order.id}><tr className={`order-row${expanded?" expanded":""}${issue?" has-issue":""}`} onClick={()=>setExpandedOrderId(expanded?null:order.id)}><td data-label="Order"><button className="order-expand" type="button" aria-expanded={expanded} aria-controls={`order-items-${order.id}`} onClick={event=>{event.stopPropagation();setExpandedOrderId(expanded?null:order.id)}}><ChevronDown size={16}/><strong title={order.orderNumber}>{displayOrderNumber(order.orderNumber)}</strong>{issue&&<span className="issue-pill"><Flag size={12}/>Issue</span>}</button></td><td data-label="Customer">{order.customer}</td><td data-label="Product" className="product-cell">{lineItems.length>1?`${lineItems.length} line items`:order.item}</td><td data-label="Quantity">{order.quantity}</td><td data-label="Status"><StatusBadge status={order.status}/></td><td data-label="Tracking">{order.trackingNumber ? <span className="tracking">{order.carrier}<ExternalLink size={13}/></span> : <span className="muted">Not assigned</span>}</td><td data-label="Date">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(order.shipDate ?? order.orderDate))}</td></tr>{expanded&&<tr className="order-detail-row" id={`order-items-${order.id}`}><td colSpan={7}><div className="order-detail"><div className="order-detail-heading"><strong>Items in {displayOrderNumber(order.orderNumber)}</strong><span>{lineItems.length} {lineItems.length===1?"line item":"line items"} · {order.quantity} total {order.quantity===1?"unit":"units"}</span></div><ul>{lineItems.map((item,index)=><li key={`${item.name}-${index}`}><span>{item.name}</span><strong>Qty {item.quantity}</strong></li>)}</ul>{issue?<div className="order-issue-box"><div><Flag size={18}/><span><strong>{issue.reason}</strong>{issue.note&&<small>{issue.note}</small>}<small>Flagged by {issue.created_by_name}</small></span></div><button type="button" onClick={()=>resolveIssue(order.id)} disabled={issueSaving}><CircleCheck size={16}/>Mark resolved</button></div>:order.status==="pending"&&<div className="flag-order-form"><strong>Unable to ship?</strong><div><select value={issueReason} onChange={event=>setIssueReason(event.target.value)}><option>Incomplete address</option><option>Cannot ship to PO box</option><option>Address verification failed</option><option>Missing customer information</option><option>Inventory unavailable</option><option>Other</option></select><input value={issueNote} onChange={event=>setIssueNote(event.target.value)} placeholder="Optional details"/><button type="button" onClick={()=>flagOrder(order)} disabled={issueSaving}><Flag size={15}/>{issueSaving?"Saving…":"Flag order"}</button></div></div>}</div></td></tr>}</Fragment>})}</tbody></table>{filtered.length === 0 && <div className="empty">No orders match this search.</div>}</div>
           <footer className="panel-footer"><span>Showing {filtered.length} of {orders.length} orders</span><span>{lastSync ? `Last successful refresh: ${lastSync}` : "Loaded with page"}</span></footer>
         </section>
         <PortalAccess/>
