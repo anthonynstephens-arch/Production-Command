@@ -2,6 +2,8 @@ import webpush from "web-push";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getShipStationOrders } from "./shipstation";
 const origin = "https://production-command-six.vercel.app";
+const emailOrigin =
+  "https://www.detroitdecalandapparel.com/pages/production-command";
 const escapeHtml = (value: unknown) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -228,7 +230,7 @@ export async function dispatchNotifications() {
                     job.payload.title || "Production Command alert",
                   ),
                   body = String(job.payload.body || ""),
-                  target = String(job.payload.target_url || origin),
+                  target = emailOrigin,
                   buttonLabel = String(
                     job.payload.button_label || "Open Production Command",
                   ),
@@ -276,6 +278,7 @@ export async function dispatchNotifications() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     ...job.payload,
+                    target_url: emailOrigin,
                     recipient_email: pref.email,
                     notification_preference: pref.channel,
                   }),
