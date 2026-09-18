@@ -41,6 +41,17 @@ type LegacyShipStationOrder = {
   items?: Array<{ name?: string; quantity?: number }>;
 };
 
+type LegacyShipStationShipment = {
+  shipmentId?: number;
+  orderId?: number;
+  orderNumber?: string;
+  shipDate?: string;
+  createDate?: string;
+  trackingNumber?: string;
+  carrierCode?: string;
+  voided?: boolean;
+};
+
 const demoOrders: PortalOrder[] = [
   { id: "demo-1", orderNumber: "MS-1087", customer: "Danielle Carter", item: "Whatupdoe Welcome Mat", quantity: 1, status: "pending", orderDate: "2026-09-12T13:20:00Z" },
   { id: "demo-2", orderNumber: "MS-1086", customer: "Marcus Hill", item: "Did You Call First Mat", quantity: 2, status: "pending", orderDate: "2026-09-12T10:05:00Z" },
@@ -56,13 +67,13 @@ function fulfillmentItems(items?: RawLineItem[]) {
     .filter(item => item.quantity > 0 && !/^(discount|coupon|promo(?:tion)?|order discount|automatic discount|price adjustment)(?:\b|\s*[:—–-])/i.test(item.name));
 }
 
-function normalizeStatus(value?: string, _shipDate?: string, trackingNumber?: string): PortalOrder["status"] {
+function normalizeStatus(value?: string, _shipDate?: string, trackingNumber?: string, verifiedShipment = false): PortalOrder["status"] {
   const status = value?.toLowerCase() ?? "pending";
   if (status.includes("deliver")) return "delivered";
   // ShipStation and connected stores can label an order "shipped" before a
   // real outbound shipment exists. Only count it as shipped when the order
   // contains shipment evidence that the production team can verify.
-  if (trackingNumber && (status.includes("ship") || status.includes("label") || status.includes("complete"))) return "shipped";
+  if (verifiedShipment || (trackingNumber && (status.includes("ship") || status.includes("label") || status.includes("complete")))) return "shipped";
   return "pending";
 }
 
@@ -77,20 +88,35 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
     // name; the shipments API only returns shipments and therefore makes
     // every result appear shipped.
     if (apiSecret) {
-      const legacy = await fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
-        headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" },
+      const headers = { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" };
+      const [legacy, shipmentResponse] = await Promise.all([fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
+        headers,
         cache: "no-store", signal: AbortSignal.timeout(12000),
-      });
+      }), fetch("https://ssapi.shipstation.com/shipments?pageSize=500&sortBy=ShipDate&sortDir=DESC", {
+        headers,
+        cache: "no-store", signal: AbortSignal.timeout(12000),
+      }).catch(() => null)]);
       if (!legacy.ok) throw new Error(`ShipStation authentication failed (${legacy.status}).`);
       const payload = await legacy.json() as { orders?: LegacyShipStationOrder[] };
+      const shipmentPayload = shipmentResponse?.ok ? await shipmentResponse.json() as { shipments?: LegacyShipStationShipment[] } : { shipments: [] };
+      const shipmentsByOrder = new Map<string, LegacyShipStationShipment>();
+      for (const shipment of shipmentPayload.shipments ?? []) {
+        if (shipment.voided) continue;
+        if (shipment.orderId !== undefined && !shipmentsByOrder.has(`id:${shipment.orderId}`)) shipmentsByOrder.set(`id:${shipment.orderId}`, shipment);
+        if (shipment.orderNumber && !shipmentsByOrder.has(`number:${shipment.orderNumber}`)) shipmentsByOrder.set(`number:${shipment.orderNumber}`, shipment);
+      }
       const orders = (payload.orders ?? []).filter(order => order.orderStatus?.toLowerCase() !== "cancelled").map((order, index): PortalOrder => {
         const items = fulfillmentItems(order.items);
+        const shipment = (order.orderId !== undefined ? shipmentsByOrder.get(`id:${order.orderId}`) : undefined) ?? (order.orderNumber ? shipmentsByOrder.get(`number:${order.orderNumber}`) : undefined);
+        const trackingNumber = shipment?.trackingNumber || order.trackingNumber;
+        const shipDate = shipment?.shipDate || shipment?.createDate || order.shipDate;
+        const carrier = shipment?.carrierCode || order.carrierCode;
         return {
           id: String(order.orderId ?? `legacy-${index}`), orderNumber: order.orderNumber ?? "Unnumbered", customer: order.shipTo?.name?.trim() || order.customerName?.trim() || order.billTo?.name?.trim() || "Customer name unavailable",
           item: items.map(item => item.name).join(", ") || "Marsh Supply order",
           quantity: items.reduce((sum, item) => sum + item.quantity, 0),
-          status: normalizeStatus(order.orderStatus, order.shipDate, order.trackingNumber), orderDate: order.orderDate ?? new Date().toISOString(), shipDate: order.shipDate,
-          trackingNumber: order.trackingNumber, carrier: order.carrierCode?.toUpperCase(), items,
+          status: normalizeStatus(order.orderStatus, shipDate, trackingNumber, Boolean(shipment)), orderDate: order.orderDate ?? new Date().toISOString(), shipDate,
+          trackingNumber, carrier: carrier?.toUpperCase(), items,
         };
       });
       return { orders, connected: true, message: "Connected to ShipStation orders." };
