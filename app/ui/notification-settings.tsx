@@ -1,12 +1,13 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
-import {Bell,X} from 'lucide-react';
+import {Bell,Send,X} from 'lucide-react';
 type Preferences={channel:'none'|'push'|'email'|'both';email:string;chat:boolean;billing:boolean;supplies:boolean;shipping_issues:boolean};
 const defaults:Preferences={channel:'none',email:'',chat:true,billing:false,supplies:false,shipping_issues:true};
 async function api(path:string,body?:object,method='POST'){const r=await fetch('/api/notifications/'+path,{method:body?method:'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Notification settings unavailable.');return data;}
 export async function disconnectPushDevice(){if(!('serviceWorker' in navigator))return;const reg=await navigator.serviceWorker.getRegistration('/');const subscription=await reg?.pushManager.getSubscription();if(subscription){await api('subscribe',{endpoint:subscription.endpoint},'DELETE');await subscription.unsubscribe();}}
-export default function NotificationSettings(){
+export default function NotificationSettings({isAdmin=false}:{isAdmin?:boolean}){
  const [open,setOpen]=useState(false),[preferences,setPreferences]=useState<Preferences>(defaults),[publicKey,setPublicKey]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[ready,setReady]=useState(false),[device,setDevice]=useState(false),[supported,setSupported]=useState(false),[ios,setIos]=useState(false);
+ const [broadcast,setBroadcast]=useState({title:'Production Command update',body:'',targetUrl:'https://production-command-six.vercel.app/'});
  const dialog=useRef<HTMLDialogElement>(null);
  useEffect(()=>{setSupported('serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window);setIos(/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.matchMedia('(display-mode: standalone)').matches);
   api('preferences').then(async data=>{setPreferences({...defaults,...data.preferences,email:data.preferences?.email||data.defaultEmail});setPublicKey(data.publicKey);setReady(true);if(!data.preferences||new URLSearchParams(window.location.search).has('notifications'))setOpen(true);
@@ -26,6 +27,13 @@ export default function NotificationSettings(){
    await api('preferences',choice,'PUT');setPreferences(choice);setMessage('Notification preferences saved.');setOpen(false);
   }catch(e){setMessage((e as Error).message);}finally{setBusy(false);}
  }
+ async function sendBroadcast(){
+  if(!broadcast.title.trim()||!broadcast.body.trim()){setMessage('Enter a subject and message.');return;}
+  if(!window.confirm('Send this notification to every active user with a saved email or push device?'))return;
+  setBusy(true);setMessage('');
+  try{const data=await api('broadcast',broadcast);setMessage(data.message);setBroadcast(current=>({...current,body:''}));}
+  catch(e){setMessage((e as Error).message);}finally{setBusy(false);}
+ }
  return <>
   <button className="view-toggle notification-settings-button" onClick={()=>setOpen(true)}><Bell size={16}/>Notifications</button>
   <dialog ref={dialog} className="notification-dialog" onCancel={()=>setOpen(false)}>
@@ -38,6 +46,7 @@ export default function NotificationSettings(){
     {preferences.channel!=='none'&&<fieldset><legend>Send me alerts about</legend>{(['shipping_issues','chat','billing','supplies'] as const).map(key=><label key={key}><input type="checkbox" checked={preferences[key]} onChange={e=>setPreferences({...preferences,[key]:e.target.checked})}/>{({shipping_issues:'Orders unable to ship',chat:'Group chat and my direct messages',billing:'Ledger charges and daily balance reminders',supplies:'Low supplies'})[key]}</label>)}</fieldset>}
     {['email','both'].includes(preferences.channel)&&<p className="notification-note">Shipping-issue and group-message email alerts are connected. Push supports every alert category.</p>}
     <button type="button" disabled={busy} className="notification-test" onClick={async()=>{setBusy(true);try{const data=await api("test",{});setMessage(data.message);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}}>Send test to my saved channels</button>
+    {isAdmin&&<section className="notification-broadcast"><div><Send size={18}/><div><strong>Notify all users</strong><small>Edit exactly what will be sent by email and push.</small></div></div><label>Subject<input maxLength={120} value={broadcast.title} onChange={e=>setBroadcast({...broadcast,title:e.target.value})}/></label><label>Message<textarea maxLength={2000} rows={4} value={broadcast.body} onChange={e=>setBroadcast({...broadcast,body:e.target.value})} placeholder="Type the notification message…"/></label><label>Button link<input type="url" value={broadcast.targetUrl} onChange={e=>setBroadcast({...broadcast,targetUrl:e.target.value})}/></label><button type="button" className="sync-button" disabled={busy||!broadcast.title.trim()||!broadcast.body.trim()} onClick={sendBroadcast}><Send size={15}/>{busy?'Sending…':'Send to all users'}</button><small>Everyone with a saved email address receives email. Enrolled devices also receive push.</small></section>}
     <div className="notification-actions"><button className="sync-button" disabled={busy} onClick={()=>save()}>{busy?'Saving…':'Save preferences'}</button><button disabled={busy} onClick={()=>save({...preferences,channel:'none'})}>Not now</button></div>
    </>}{message&&<p role="status">{message}</p>}
   </dialog>

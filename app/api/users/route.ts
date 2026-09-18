@@ -18,7 +18,10 @@ export async function POST(request: Request) {
   if (existing?.some(user=>verifyPin(body.pin,user.pin_salt,user.pin_hash))) return Response.json({error:"That PIN is already assigned. Choose another PIN."},{status:409});
   const { salt, hash } = hashPin(body.pin);
   const password = typeof body.password === "string" && body.password.length >= 8 ? hashPin(body.password) : null;
-  const { error } = await getSupabaseAdmin().from("marsh_portal_users").insert({ display_name: body.name.trim(), email: typeof body.email === "string" && body.email.includes("@") ? body.email.trim().toLowerCase() : null, role: body.role, pin_salt: salt, pin_hash: hash, password_salt:password?.salt ?? null, password_hash:password?.hash ?? null, must_change_pin:true });
+  const email = typeof body.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim()) ? body.email.trim().toLowerCase() : null;
+  const db=getSupabaseAdmin();
+  const { data:user,error } = await db.from("marsh_portal_users").insert({ display_name: body.name.trim(), email, role: body.role, pin_salt: salt, pin_hash: hash, password_salt:password?.salt ?? null, password_hash:password?.hash ?? null, must_change_pin:true }).select("id").single();
+  if(!error&&user)await db.from("marsh_notification_preferences").upsert({user_id:user.id,channel:email?'email':'none',email,chat:true,billing:true,supplies:true,shipping_issues:true,updated_at:new Date().toISOString()});
   return error ? Response.json({ error: error.code === "23505" ? "That PIN is already assigned." : error.message }, { status: 400 }) : Response.json({ ok: true }, { status: 201 });
 }
 
@@ -28,6 +31,8 @@ export async function PATCH(request: Request) {
   const body = await request.json().catch(() => ({}));
   if (typeof body.userId !== "string" || typeof body.email !== "string" || !body.email.includes("@") || typeof body.password !== "string" || body.password.length < 8) return Response.json({ error: "Enter a valid email and a temporary password of at least 8 characters." }, { status: 400 });
   const password = hashPin(body.password);
-  const { error } = await getSupabaseAdmin().from("marsh_portal_users").update({ email:body.email.trim().toLowerCase(), password_salt:password.salt, password_hash:password.hash }).eq("id",body.userId);
+  const db=getSupabaseAdmin(),email=body.email.trim().toLowerCase();
+  const { error } = await db.from("marsh_portal_users").update({ email, password_salt:password.salt, password_hash:password.hash }).eq("id",body.userId);
+  if(!error){const {data:pref}=await db.from('marsh_notification_preferences').select('channel').eq('user_id',body.userId).maybeSingle();const channel=pref?.channel==='push'||pref?.channel==='both'?'both':'email';await db.from('marsh_notification_preferences').upsert({user_id:body.userId,email,channel,chat:true,billing:true,supplies:true,shipping_issues:true,updated_at:new Date().toISOString()});}
   return error ? Response.json({ error:error.code === "23505" ? "That email is already assigned." : error.message }, { status:400 }) : Response.json({ ok:true });
 }
