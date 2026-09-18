@@ -37,6 +37,27 @@ export async function GET() {
   return Response.json({ inventory });
 }
 
+export async function POST(request: Request) {
+  const session = await getPortalSession();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const shipments = Array.isArray(body.shipments) ? body.shipments.slice(0, 500).map((shipment: unknown) => {
+    const record = shipment && typeof shipment === "object" ? shipment as Record<string, unknown> : {};
+    return { id: String(record.id || "").slice(0, 160), units: Math.max(0, Math.trunc(Number(record.units) || 0)) };
+  }).filter((shipment: { id: string; units: number }) => shipment.id && shipment.units > 0) : [];
+
+  if (!shipments.length) return Response.json({ ok: true, processedShipments: 0, processedUnits: 0 });
+
+  const db = getSupabaseAdmin();
+  const { data, error } = await db.rpc("sync_marsh_shipment_inventory", {
+    p_account_slug: ACCOUNT_SLUG,
+    p_shipments: shipments,
+  });
+  if (error) return Response.json({ error: "Could not apply shipment inventory usage." }, { status: 500 });
+  return Response.json({ ok: true, ...data });
+}
+
 export async function PATCH(request: Request) {
   const session = await getPortalSession();
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
