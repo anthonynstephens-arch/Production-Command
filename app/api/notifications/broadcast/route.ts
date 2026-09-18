@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { getPortalSession } from "@/lib/auth";
-import { dispatchNotifications } from "@/lib/notifications";
+import { dispatchNotifications, orderDetailLines } from "@/lib/notifications";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getShipStationOrders } from "@/lib/shipstation";
 
 const appOrigin = "https://production-command-six.vercel.app";
 const categories = new Set([
@@ -36,12 +37,12 @@ export async function POST(request: Request) {
   const db = getSupabaseAdmin(),
     details: DetailItem[] = [];
   if (category === "shipping_issues") {
-    const { data, error } = await db
+    const [{ data, error }, shipstation] = await Promise.all([db
       .from("marsh_order_issues")
-      .select("order_number,reason,note,created_by_name,created_at")
+      .select("order_id,order_number,reason,note,created_by_name,created_at")
       .eq("account_slug", "marsh-supply")
       .is("resolved_at", null)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false }), getShipStationOrders()]);
     if (error)
       return Response.json(
         { error: "Could not load current shipping issues." },
@@ -58,15 +59,18 @@ export async function POST(request: Request) {
     body =
       body || "The following orders need attention before they can be shipped.";
     targetUrl = appOrigin + "/#order-queue";
-    for (const issue of data)
+    for (const issue of data) {
+      const order = shipstation.orders.find(item => item.id === issue.order_id || item.orderNumber === issue.order_number);
       details.push({
         heading: `Order ${issue.order_number}`,
         lines: [
           `Reason: ${issue.reason}`,
           ...(issue.note ? [`Details: ${issue.note}`] : []),
           `Flagged by: ${issue.created_by_name}`,
+          ...(order ? orderDetailLines(order) : ["Complete order details are temporarily unavailable from ShipStation."]),
         ],
       });
+    }
   } else if (category === "billing") {
     const { data, error } = await db.rpc("marsh_notification_balance");
     if (error)

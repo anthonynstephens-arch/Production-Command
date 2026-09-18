@@ -1,5 +1,7 @@
 import { getPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getShipStationOrders } from "@/lib/shipstation";
+import { orderDetailLines } from "@/lib/notifications";
 
 const ACCOUNT_SLUG = "marsh-supply";
 const reasons = new Set(["Incomplete address", "Cannot ship to PO box", "Address verification failed", "Missing customer information", "Inventory unavailable", "Other"]);
@@ -23,7 +25,9 @@ export async function POST(request: Request) {
   const db = getSupabaseAdmin();
   const { data, error } = await db.from("marsh_order_issues").upsert({ account_slug: ACCOUNT_SLUG, order_id: orderId, order_number: orderNumber, reason, note, created_by_name: session.name, created_at: new Date().toISOString(), resolved_at: null, resolved_by_name: null }, { onConflict: "account_slug,order_id" }).select("*").single();
   if (error) return Response.json({ error: "Could not flag this order." }, { status: 500 });
-  await db.rpc("enqueue_marsh_notification", { event_key: `shipping-issue:${orderId}:${Date.now()}`, event_kind: "shipping_issue", category: "shipping_issues", event_payload: { order_id: orderId, order_number: orderNumber, reason, note, reported_by: session.name, title: `Shipping issue: ${orderNumber}`, body: `${reason}${note ? ` — ${note}` : ""}`, target_url: "https://production-command-six.vercel.app/#order-queue" }, exclude_user: session.userId });
+  const shipstation = await getShipStationOrders();
+  const order = shipstation.orders.find(item => item.id === orderId || item.orderNumber === orderNumber);
+  await db.rpc("enqueue_marsh_notification", { event_key: `shipping-issue:${orderId}:${Date.now()}`, event_kind: "shipping_issue", category: "shipping_issues", event_payload: { order_id: orderId, order_number: orderNumber, reason, note, reported_by: session.name, title: `Shipping issue: ${orderNumber}`, body: `${reason}${note ? ` — ${note}` : ""}`, detail_items: [{ heading: `Order ${orderNumber}`, lines: order ? orderDetailLines(order) : ["Complete order details are temporarily unavailable from ShipStation."] }], target_url: "https://production-command-six.vercel.app/#order-queue" }, exclude_user: session.userId });
   return Response.json({ issue: data });
 }
 
