@@ -115,35 +115,15 @@ export default function Dashboard({ initialOrders, initialConnected, initialMess
   };
 
   useEffect(() => {
-    const currentShipped = orders.filter((order) => order.status === "shipped" || order.status === "delivered").map((order) => order.id);
-    const stored = window.localStorage.getItem("marsh-processed-shipments");
-    if (!stored) {
-      window.localStorage.setItem("marsh-processed-shipments", JSON.stringify(currentShipped));
-      return;
-    }
-    let processed: string[] = [];
-    try { processed = JSON.parse(stored); } catch {}
-    const newShipments = orders.filter((order) => (order.status === "shipped" || order.status === "delivered") && !processed.includes(order.id));
-    const unitsToDeduct = newShipments.reduce((sum, order) => sum + order.quantity, 0);
-    if (unitsToDeduct > 0) {
-      setSupplies((current) => {
-        const tapeCoverage = Math.max(1, current.tapeCoverage || defaults.tapeCoverage);
-        const accumulatedTapeUse = (current.tapeUsage || 0) + unitsToDeduct;
-        const rollsUsed = Math.floor(accumulatedTapeUse / tapeCoverage);
-        const next = {
-          ...current,
-          mats: Math.max(0, current.mats - unitsToDeduct),
-          boxes: Math.max(0, current.boxes - unitsToDeduct),
-          tape: Math.max(0, current.tape - rollsUsed),
-          tapeUsage: accumulatedTapeUse % tapeCoverage,
-          thankYouCards: Math.max(0, current.thankYouCards - unitsToDeduct),
-          polyBags: Math.max(0, current.polyBags - unitsToDeduct),
-        };
-        window.localStorage.setItem("marsh-supplies", JSON.stringify(next));
-        return next;
-      });
-      window.localStorage.setItem("marsh-processed-shipments", JSON.stringify([...new Set([...processed, ...currentShipped])]));
-    }
+    const shippedOrders = orders.filter((order) => (order.status === "shipped" || order.status === "delivered") && order.quantity > 0);
+    if (!shippedOrders.length) return;
+    let cancelled = false;
+    const applyShipmentUsage = async () => {
+      const response = await fetch("/api/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipments: shippedOrders.map(order => ({ id: order.id, units: order.quantity })) }) });
+      if (response.ok && !cancelled) await loadInventory();
+    };
+    applyShipmentUsage().catch(() => {});
+    return () => { cancelled = true; };
   }, [orders]);
 
   const setSupply = async (key: keyof Supply, value: number) => {
