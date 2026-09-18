@@ -29,6 +29,45 @@ export async function PATCH(request: Request) {
   const session = await getPortalSession();
   if (session?.role !== "admin" || session.mustChangePin) return Response.json({ error: "Admin access required." }, { status: 403 });
   const body = await request.json().catch(() => ({}));
+  if (body.action === "resetPin") {
+    if (typeof body.userId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.userId) || !/^\d{4,8}$/.test(body.pin ?? "")) {
+      return Response.json({ error: "Choose a member and enter a temporary 4–8 digit PIN." }, { status: 400 });
+    }
+
+    const db = getSupabaseAdmin();
+    const { data: target, error: targetError } = await db
+      .from("marsh_portal_users")
+      .select("id,display_name")
+      .eq("id", body.userId)
+      .eq("active", true)
+      .maybeSingle();
+    if (targetError) return Response.json({ error: "Could not load that member. Please retry." }, { status: 500 });
+    if (!target) return Response.json({ error: "That active member could not be found." }, { status: 404 });
+
+    const { data: existing, error: lookupError } = await db
+      .from("marsh_portal_users")
+      .select("pin_salt,pin_hash")
+      .eq("active", true)
+      .neq("id", body.userId);
+    if (lookupError) return Response.json({ error: "Could not verify PIN availability. Please retry." }, { status: 500 });
+    if (existing?.some((user) => verifyPin(body.pin, user.pin_salt, user.pin_hash))) {
+      return Response.json({ error: "That PIN is already assigned. Choose another PIN." }, { status: 409 });
+    }
+
+    const { salt, hash } = hashPin(body.pin);
+    const { data: updated, error } = await db
+      .from("marsh_portal_users")
+      .update({ pin_salt: salt, pin_hash: hash, must_change_pin: true })
+      .eq("id", body.userId)
+      .eq("active", true)
+      .select("id")
+      .maybeSingle();
+    if (error) return Response.json({ error: error.code === "23505" ? "That PIN is already assigned." : error.message }, { status: 400 });
+    if (!updated) return Response.json({ error: "That active member could not be found." }, { status: 404 });
+
+    return Response.json({ ok: true, memberName: target.display_name });
+  }
+
   if (typeof body.userId !== "string" || typeof body.email !== "string" || !body.email.includes("@") || typeof body.password !== "string" || body.password.length < 8) return Response.json({ error: "Enter a valid email and a temporary password of at least 8 characters." }, { status: 400 });
   const password = hashPin(body.password);
   const db=getSupabaseAdmin(),email=body.email.trim().toLowerCase();

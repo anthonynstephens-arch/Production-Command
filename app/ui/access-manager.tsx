@@ -23,7 +23,9 @@ export default function AccessManager() {
   const [name, setName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [pin, setPin] = useState("");
+  const [resetPin, setResetPin] = useState("");
   const [role, setRole] = useState("partner");
+  const [resetting, setResetting] = useState(false);
   async function create(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -73,6 +75,7 @@ export default function AccessManager() {
     const user = users.find((item) => item.id === selected);
     setEmail(user?.email ?? "");
     setPassword("");
+    setResetPin("");
   }, [selected, users]);
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -96,6 +99,35 @@ export default function AccessManager() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+  async function resetMemberPin(event: React.FormEvent) {
+    event.preventDefault();
+    const member = users.find((item) => item.id === selected);
+    if (!member || !/^\d{4,8}$/.test(resetPin)) {
+      setMessage("Choose a member and enter a temporary 4–8 digit PIN.");
+      return;
+    }
+    if (!window.confirm(`Reset ${member.display_name}'s PIN? Their current PIN will stop working immediately.`)) return;
+
+    setResetting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "resetPin", userId: selected, pin: resetPin }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not reset the PIN.");
+      setResetPin("");
+      setMessage(`${body.memberName ?? member.display_name}'s PIN was reset. Give them the temporary PIN; they must replace it at their next sign-in.`);
+      await load();
+      window.dispatchEvent(new Event("portal-users-updated"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not reset the PIN.");
+    } finally {
+      setResetting(false);
     }
   }
   return (
@@ -241,6 +273,33 @@ export default function AccessManager() {
           <Save size={16} />
           {saving ? "Saving…" : "Enable email sign-in"}
         </button>
+      </form>
+      <form className="access-form reset-pin-form" onSubmit={resetMemberPin}>
+        <label>
+          <span>
+            <KeyRound size={15} />
+            Temporary replacement PIN
+          </span>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoComplete="new-password"
+            pattern="[0-9]{4,8}"
+            minLength={4}
+            maxLength={8}
+            value={resetPin}
+            onChange={(event) => setResetPin(event.target.value.replace(/\D/g, ""))}
+            placeholder="4–8 digits"
+            required
+          />
+        </label>
+        <button className="sync-button reset-pin-button" disabled={resetting || !selected || resetPin.length < 4}>
+          <KeyRound size={16} />
+          {resetting ? "Resetting…" : "Reset member PIN"}
+        </button>
+        <small>
+          Replaces the selected member&apos;s PIN immediately. They will be required to create a new private PIN at their next sign-in.
+        </small>
       </form>
       {message && (
         <div className="access-message" role="status">
