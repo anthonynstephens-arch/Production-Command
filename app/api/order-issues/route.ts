@@ -8,9 +8,17 @@ const reasons = new Set(["Incomplete address", "Cannot ship to PO box", "Address
 
 export async function GET() {
   if (!await getPortalSession()) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const { data, error } = await getSupabaseAdmin().from("marsh_order_issues").select("*").eq("account_slug", ACCOUNT_SLUG).is("resolved_at", null).order("created_at", { ascending: false });
+  const [{ data, error }, shipstation] = await Promise.all([
+    getSupabaseAdmin().from("marsh_order_issues").select("*").eq("account_slug", ACCOUNT_SLUG).is("resolved_at", null).order("created_at", { ascending: false }),
+    getShipStationOrders(),
+  ]);
   if (error) return Response.json({ error: "Could not load order issues." }, { status: 500 });
-  return Response.json({ issues: data ?? [] });
+  if (!shipstation.connected) return Response.json({ issues: data ?? [] });
+
+  const orderIds = new Set(shipstation.orders.map(order => order.id));
+  const orderNumbers = new Set(shipstation.orders.map(order => order.orderNumber));
+  const issues = (data ?? []).filter(issue => orderIds.has(issue.order_id) || orderNumbers.has(issue.order_number));
+  return Response.json({ issues });
 }
 
 export async function POST(request: Request) {

@@ -577,6 +577,18 @@ export default function Dashboard({
     [orders],
   );
 
+  // Issue records are stored separately from ShipStation orders. If a test or
+  // cancelled order is deleted upstream, do not keep counting its orphaned
+  // issue while the API refresh catches up.
+  const currentOrderIssues = useMemo(() => {
+    const orderIds = new Set(orders.map((order) => order.id));
+    const orderNumbers = new Set(orders.map((order) => order.orderNumber));
+    return orderIssues.filter(
+      (issue) =>
+        orderIds.has(issue.order_id) || orderNumbers.has(issue.order_number),
+    );
+  }, [orderIssues, orders]);
+
   const matTotals = useMemo(() => {
     const totals = {
       whatupdoe: 0,
@@ -603,7 +615,7 @@ export default function Dashboard({
   }, [orders]);
 
   const issueRank = new Map(
-    orderIssues.map((issue, index) => [issue.order_id, index]),
+    currentOrderIssues.map((issue, index) => [issue.order_id, index]),
   );
   const filtered = orders
     .filter(
@@ -895,13 +907,13 @@ export default function Dashboard({
               </button>
             )}
           </div>
-          {orderIssues.length > 0 && (
+          {currentOrderIssues.length > 0 && (
             <a className="summary-copy order-issue-alert" href="#order-queue">
               <Flag size={19} />
               <span>
                 <strong>
-                  {orderIssues.length}{" "}
-                  {orderIssues.length === 1 ? "order is" : "orders are"} unable
+                  {currentOrderIssues.length}{" "}
+                  {currentOrderIssues.length === 1 ? "order is" : "orders are"} unable
                   to ship.
                 </strong>{" "}
                 Review and resolve the flagged fulfillment issues.
@@ -956,7 +968,7 @@ export default function Dashboard({
             </div>
             <div>
               <span>Shipping issues</span>
-              <strong>{orderIssues.length}</strong>
+              <strong>{currentOrderIssues.length}</strong>
             </div>
             <div>
               <span>New in 7 days</span>
@@ -1297,7 +1309,7 @@ export default function Dashboard({
               <p>Orders with issues</p>
             </div>
             <div className="metric-value">
-              <strong>{orderIssues.length}</strong>
+              <strong>{currentOrderIssues.length}</strong>
               <small>Resolve issues to ship</small>
             </div>
           </article>
@@ -1478,7 +1490,7 @@ export default function Dashboard({
                   const lineItems = order.items?.length
                     ? order.items
                     : [{ name: order.item, quantity: order.quantity }];
-                  const issue = orderIssues.find(
+                  const issue = currentOrderIssues.find(
                     (item) => item.order_id === order.id,
                   );
                   const address = order.shippingAddress;
