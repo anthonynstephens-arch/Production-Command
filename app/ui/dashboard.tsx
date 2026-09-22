@@ -29,6 +29,7 @@ import {
   CircleCheck,
 } from "lucide-react";
 import type { PortalOrder } from "@/lib/shipstation";
+import { designKey, getMatAvailability } from "@/lib/mat-availability";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
 import PortalAccess from "./portal-access";
@@ -274,18 +275,6 @@ function displayOrderNumber(orderNumber: string) {
     : orderNumber;
 }
 
-function designKey(name: string) {
-  const normalized = name.toLowerCase();
-  if (normalized.includes("did you call")) return "did-you-call-first";
-  if (normalized.includes("upside down") || normalized.includes("upside-down"))
-    return "upside-down-welcome";
-  if (normalized.includes("whatupdoe") || normalized.includes("what up doe"))
-    return "whatupdoe";
-  if (normalized.includes("marsh supply") || normalized.includes("marsh"))
-    return "marsh-supply";
-  return null;
-}
-
 export default function Dashboard({
   initialOrders,
   initialConnected,
@@ -322,6 +311,8 @@ export default function Dashboard({
   const [issueNote, setIssueNote] = useState("");
   const [issueSaving, setIssueSaving] = useState(false);
   const [finishedMats, setFinishedMats] = useState<FinishedMat[]>([]);
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
+  const [finishedMatsLoaded, setFinishedMatsLoaded] = useState(false);
   const [printBatch, setPrintBatch] = useState({
     designKey: "whatupdoe",
     quantity: "",
@@ -335,6 +326,7 @@ export default function Dashboard({
     if (!response.ok)
       throw new Error(data.error || "Could not load inventory.");
     setSupplies((current) => ({ ...current, ...data.inventory }));
+    setInventoryLoaded(Number.isFinite(data.inventory?.mats));
   };
 
   useEffect(() => {
@@ -361,8 +353,10 @@ export default function Dashboard({
         issueExpansionInitialized.current = true;
       }
     }
-    if (matsResponse.ok)
+    if (matsResponse.ok) {
       setFinishedMats((await matsResponse.json()).designs ?? []);
+      setFinishedMatsLoaded(true);
+    }
   };
 
   useEffect(() => {
@@ -638,7 +632,10 @@ export default function Dashboard({
   const committedUnits = orders
     .filter((order) => order.status === "pending")
     .reduce((sum, order) => sum + order.quantity, 0);
-  const availableMats = Math.max(0, supplies.mats - committedUnits);
+  const matAvailability = getMatAvailability(orders, supplies.mats, finishedMats);
+  const matStockChecked = connected && inventoryLoaded && finishedMatsLoaded;
+  const blockedMatOrders = matStockChecked ? matAvailability.blockedOrderIds : new Set<string>();
+  const availableMats = matAvailability.availableBlanks;
   const availableBoxes = Math.max(0, supplies.boxes - committedUnits);
   const tapeCoverage = Math.max(1, supplies.tapeCoverage);
   const committedTapeRolls = Math.ceil(
@@ -909,6 +906,32 @@ export default function Dashboard({
               </button>
             )}
           </div>
+          {blockedMatOrders.size > 0 && (
+            <div className="summary-copy mat-shortage-alert" role="status">
+              <AlertTriangle size={23} />
+              <div>
+                <strong className="mat-shortage-title">
+                  Purchasing required — unable to fulfill {blockedMatOrders.size}{" "}
+                  pending {blockedMatOrders.size === 1 ? "order" : "orders"}
+                </strong>
+                <p>
+                  Current blank mats and matching pre-printed stock cannot cover these orders.
+                  {" "}{matAvailability.missingMats} additional {matAvailability.missingMats === 1 ? "mat is" : "mats are"} needed
+                  to cover the queue: {matAvailability.shortages.map((item) => `${item.name} (${item.quantity})`).join(", ")}.
+                </p>
+                <p>
+                  Per our agreement, production runs require a <strong>minimum of 40 mats</strong>.
+                  {" "}Please arrange the blank mats and required supplies, and submit payment before the next production run.
+                </p>
+                <small>Stock is allocated to pending orders oldest first. Incoming deliveries are excluded until received.</small>
+                <div className="mat-shortage-links">
+                  <a href="#order-queue" onClick={() => { setFilter("pending"); setQuery(""); }}>View pending orders</a>
+                  <a href="#operations">Supplies &amp; payment</a>
+                  <a href="/marsh-service-agreement.pdf" target="_blank" rel="noreferrer">Service agreement</a>
+                </div>
+              </div>
+            </div>
+          )}
           {currentOrderIssues.length > 0 && (
             <a className="summary-copy order-issue-alert" href="#order-queue">
               <Flag size={19} />
@@ -965,12 +988,16 @@ export default function Dashboard({
           </p>
           <div className="summary-stats">
             <div>
-              <span>Pipeline</span>
+              <span>Pending orders</span>
               <strong>{pipelineOrders} orders</strong>
             </div>
             <div>
               <span>Shipping issues</span>
               <strong>{currentOrderIssues.length}</strong>
+            </div>
+            <div>
+              <span>Unable to fulfill · mats</span>
+              <strong>{matStockChecked ? `${blockedMatOrders.size} orders` : "Checking stock…"}</strong>
             </div>
             <div>
               <span>New in 7 days</span>
@@ -1028,7 +1055,7 @@ export default function Dashboard({
             unit="mats"
             detail="Newly shipped units deduct automatically"
             percent={supplies.mats > 25 ? 100 : supplies.mats * 4}
-            committed={committedUnits}
+            committed={matAvailability.blankDemand}
             available={availableMats}
             incoming={incoming.mats}
             low={availableMats <= 0}
@@ -1548,6 +1575,9 @@ export default function Dashboard({
                         <td data-label="Quantity">{order.quantity}</td>
                         <td data-label="Status">
                           <StatusBadge status={order.status} />
+                          {blockedMatOrders.has(order.id) && (
+                            <span className="issue-pill mat-shortage-pill">Unable to ship · mat shortage</span>
+                          )}
                         </td>
                         <td data-label="Tracking">
                           {order.trackingNumber ? (
