@@ -514,7 +514,9 @@ export default function Dashboard({
       if (!response.ok)
         throw new Error(data.error || "Could not record print run.");
       setPrintBatch((current) => ({ ...current, quantity: "" }));
-      setPrintMessage("Printed mats added and blank inventory reduced.");
+      setPrintMessage(Number(printBatch.quantity) < 0
+        ? "Printed stock reduced. Blank mat inventory unchanged."
+        : "Printed mats added and blank inventory reduced.");
       await Promise.all([loadInventory(), loadOperationalData()]);
     } catch (error) {
       setPrintMessage(
@@ -1155,8 +1157,8 @@ export default function Dashboard({
           {view === "admin" && (
             <article className="finished-mat-card print-batch-card">
               <div>
-                <span>RECORD PRODUCTION</span>
-                <h3>Add printed mats</h3>
+                <span>ADJUST PRINTED STOCK</span>
+                <h3>Add or remove printed mats</h3>
               </div>
               <label>
                 Design
@@ -1177,11 +1179,13 @@ export default function Dashboard({
                 </select>
               </label>
               <label>
-                Quantity printed
+                Quantity change (+ / −)
                 <input
                   type="number"
-                  min="1"
-                  max={supplies.mats}
+                  min={-(finishedMats.find((mat) => mat.design_key === printBatch.designKey)?.quantity ?? 0)}
+                  max={Math.min(10000, supplies.mats)}
+                  step="1"
+                  placeholder="e.g. 10 or -5"
                   value={printBatch.quantity}
                   onChange={(event) =>
                     setPrintBatch({
@@ -1194,15 +1198,15 @@ export default function Dashboard({
               <button
                 type="button"
                 className="sync-button"
-                disabled={printSaving || !printBatch.quantity}
+                disabled={printSaving || !printBatch.quantity || !Number.isInteger(Number(printBatch.quantity)) || Number(printBatch.quantity) === 0 || Number(printBatch.quantity) < -Math.min(10000, finishedMats.find((mat) => mat.design_key === printBatch.designKey)?.quantity ?? 0) || Number(printBatch.quantity) > Math.min(10000, supplies.mats)}
                 onClick={recordPrintBatch}
               >
-                {printSaving ? "Saving…" : "Add finished batch"}
+                {printSaving ? "Saving…" : Number(printBatch.quantity) < 0 ? "Remove printed mats" : "Add finished batch"}
               </button>
               {printMessage && <small role="status">{printMessage}</small>}
               <p>
-                This transfers the quantity from blank mats into finished stock.
-                It does not increase total mat inventory.
+                Positive quantities transfer blank mats into printed stock.
+                Negative quantities remove printed stock without adding blanks back.
               </p>
             </article>
           )}
