@@ -115,6 +115,7 @@ function SupplyCard({
   admin,
   onSet,
   extraControl,
+  purchaseUrl,
   verticalMeter = false,
   low,
 }: {
@@ -130,6 +131,7 @@ function SupplyCard({
   admin: boolean;
   onSet: (value: number) => Promise<void>;
   extraControl?: React.ReactNode;
+  purchaseUrl?: string;
   verticalMeter?: boolean;
   low?: boolean;
 }) {
@@ -193,6 +195,13 @@ function SupplyCard({
       )}
       <div className="supply-footer">
         <span>{detail}</span>
+        {purchaseUrl && (
+          <a className="supply-buy-now" href={purchaseUrl} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${title.toLowerCase()} now on Amazon (opens in a new tab)`}>
+            <ShoppingBag size={17} aria-hidden="true" />
+            BUY NOW
+            <ExternalLink size={14} aria-hidden="true" />
+          </a>
+        )}
         {admin && (
           <details className="stock-editor">
             <summary>Adjust stock</summary>
@@ -1142,10 +1151,11 @@ export default function Dashboard({
             value={inkPercent}
             unit="%"
             detail={
-              inkPercent <= 25 ? "Reorder recommended" : "Supply level healthy"
+              inkPercent < 50 ? "Reorder recommended" : "Supply level healthy"
             }
             percent={inkPercent}
             incoming={incoming.ink}
+            purchaseUrl={inkPercent < 50 ? "https://www.amazon.com/dp/B000C1952Q?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1" : undefined}
             verticalMeter
             admin={view === "admin"}
             onSet={(value) => setSupply("ink", Math.min(100, value))}

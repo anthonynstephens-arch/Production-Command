@@ -52,6 +52,9 @@
 .dashboard .supply-card.low-supply { border-width:3px; animation:low-supply-pulse-smooth 1.05s ease-in-out infinite; }
 .dashboard .supply-footer { font-size:.875rem; line-height:1.5; gap:8px; }
 .dashboard .supply-footer>span { display:none; }
+.dashboard .supply-buy-now { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:9px 12px; border-radius:8px; background:#a63c0b; color:#fff; font-size:.8rem; font-weight:850; text-decoration:none; }
+.dashboard .supply-buy-now:hover { background:#823008; }
+.dashboard .supply-buy-now:focus-visible { outline:3px solid #a63c0b; outline-offset:3px; }
 .dashboard .incoming-supply { padding:8px 10px; }
 .dashboard .incoming-supply span { font-size:.8125rem; }
 .stock-editor { width:100%; border-top:1px solid var(--line); padding-top:10px; }
