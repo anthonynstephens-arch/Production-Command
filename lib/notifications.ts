@@ -67,6 +67,15 @@ async function queueDailySummary() {
   if (!shipstation.connected || inventory.error || issues.error || state.error || balance.error || users.error || preferences.error || devices.error) return;
   const orders = shipstation.orders;
   const pending = orders.filter(order => order.status === "pending");
+  const pendingById = new Map(pending.map(order => [order.id, order]));
+  const pendingByNumber = new Map(pending.map(order => [order.orderNumber, order]));
+  const activeIssues = (issues.data ?? []).flatMap(issue => {
+    const order = pendingById.get(issue.order_id) ?? pendingByNumber.get(issue.order_number);
+    return order ? [{ issue, order }] : [];
+  });
+  const yesterday = Date.now() - 24 * 60 * 60 * 1000;
+  const newOrders = orders.filter(order => new Date(order.orderDate).getTime() >= yesterday);
+  const shippedOrders = orders.filter(order => order.status !== "pending" && order.shipDate && new Date(order.shipDate).getTime() >= yesterday);
   const committed = pending.reduce((sum, order) => sum + order.quantity, 0);
   const levels = Object.fromEntries((inventory.data ?? []).map(item => [item.item_key, Number(item.quantity)]));
   const tapeCapacity = Math.max(0, Number(levels.packing_tape || 0) * Math.max(1, Number(levels.packing_tape_coverage || 1)) - Number(levels.packing_tape_usage || 0) - committed);
@@ -75,20 +84,19 @@ async function queueDailySummary() {
     cards: Math.max(0, Number(levels.thank_you_cards || 0) - committed), bags: Math.max(0, Number(levels.poly_bags || 0) - committed), tape: tapeCapacity,
   };
   const capacity = Math.min(available.mats, available.boxes, available.cards, available.bags, available.tape);
-  const issueOrders = new Map(orders.map(order => [order.id, order]));
   const detailItems: Array<{heading:string;lines:string[]}> = [
-    { heading: "Overview", lines: [`Pipeline: ${pending.length} orders (${committed} units)`, `Shipping issues: ${issues.data?.length || 0}`, `New in 7 days: ${orders.filter(order => Date.now() - new Date(order.orderDate).getTime() <= 7 * 86400000).length}`, `Available capacity: ${capacity} orders`] },
+    { heading: "Last 24 hours", lines: [`New orders: ${newOrders.length}`, `Shipped orders: ${shippedOrders.length}`] },
+    { heading: "Overview", lines: [`Pipeline: ${pending.length} orders (${committed} units)`, `Active shipping issues: ${activeIssues.length}`, `Available capacity: ${capacity} orders`] },
     { heading: "Production and payment", lines: [`Awaiting production: ${Math.max(0, pending.length - Number(state.data?.orders_in_production || 0))} orders`, `In production: ${Number(state.data?.orders_in_production || 0)} orders`, `Balance due: ${currency(Number(balance.data || 0))}`] },
     { heading: "Inventory after commitments", lines: [`Blank mats: ${available.mats}`, `Shipping boxes: ${available.boxes}`, `Packing tape capacity: ${available.tape} mats`, `Thank-you cards: ${available.cards}`, `Poly bags: ${available.bags}`, `Black ink: ${Number(levels.ink || 0)}%`] },
   ];
-  for (const issue of issues.data ?? []) {
-    const order = issueOrders.get(issue.order_id);
+  for (const { issue, order } of activeIssues) {
     detailItems.push({ heading: `Issue — Order ${issue.order_number}`, lines: [
       `Reason: ${issue.reason}${issue.note ? ` — ${issue.note}` : ""}`,
-      ...(order ? orderDetailLines(order) : ["Order details are not currently available from ShipStation."]),
+      ...orderDetailLines(order),
     ]});
   }
-  const payload = { event_id: eventId, event_type: "daily_summary", category: "broadcast", title: "Daily Production Command summary", body: `${pending.length} orders are in the pipeline, ${issues.data?.length || 0} have shipping issues, and capacity is ${capacity} additional orders.`, target_url: origin, button_label: "Open Production Command", detail_items: detailItems };
+  const payload = { event_id: eventId, event_type: "daily_summary", category: "broadcast", title: `Production Command · ${day}`, body: `${newOrders.length} new orders and ${shippedOrders.length} shipped in the last 24 hours. ${pending.length} pending orders, ${activeIssues.length} active shipping issues, and capacity for ${capacity} additional orders.`, target_url: origin, button_label: "Open Production Command", detail_items: detailItems };
   const rows: Array<Record<string, unknown>> = [];
   for (const pref of preferences.data ?? []) {
     const user = users.data?.find(item => item.id === pref.user_id);
