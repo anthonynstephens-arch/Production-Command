@@ -1,3 +1,5 @@
+import { apply17TrackDelivery } from "./tracking17";
+
 export type PortalOrder = {
   id: string;
   orderNumber: string;
@@ -131,7 +133,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
           shippingAddress: order.shipTo ? { name: order.shipTo.name, company: order.shipTo.company, street1: order.shipTo.street1, street2: order.shipTo.street2, street3: order.shipTo.street3, city: order.shipTo.city, state: order.shipTo.state, postalCode: order.shipTo.postalCode, country: order.shipTo.country } : undefined, items,
         };
       });
-      return { orders, connected: true, message: "Connected to ShipStation orders." };
+      return { orders: await apply17TrackDelivery(orders), connected: true, message: "Connected to ShipStation orders." };
     }
 
     const response = await fetch("https://api.shipstation.com/v2/orders?page_size=100&sort_dir=desc", {
@@ -153,7 +155,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
           shippingAddress: order.ship_to ? { name: order.ship_to.name, company: order.ship_to.company_name, street1: order.ship_to.address_line1, street2: order.ship_to.address_line2, street3: order.ship_to.address_line3, city: order.ship_to.city_locality, state: order.ship_to.state_province, postalCode: order.ship_to.postal_code, country: order.ship_to.country_code } : undefined, items,
         };
       });
-      return { orders, connected: true, message: "Connected to ShipStation orders." };
+      return { orders: await apply17TrackDelivery(orders), connected: true, message: "Connected to ShipStation orders." };
     }
     throw new Error(`ShipStation API returned ${response.status}.`);
   } catch (error) {

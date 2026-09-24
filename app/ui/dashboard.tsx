@@ -167,7 +167,7 @@ function SupplyCard({
       </div>
       {verticalMeter ? (
         <div className="ink-level-wrap">
-          <div className="ink-level" aria-label={`${percent} percent ink`}>
+          <div className="ink-level" aria-label={`${percent} percent ink`} style={{ "--ink-fill": `${percent}%` } as React.CSSProperties}>
             <span style={{ height: `${percent}%` }} />
           </div>
           <strong>{percent}%</strong>
@@ -563,6 +563,18 @@ export default function Dashboard({
     }
   };
 
+  useEffect(() => {
+    const refreshOrders = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    const timer = window.setInterval(refreshOrders, 5 * 60 * 1000);
+    window.addEventListener("focus", refreshOrders);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshOrders);
+    };
+  }, []);
+
   const logout = async () => {
     try {
       await disconnectPushDevice();
@@ -668,6 +680,13 @@ export default function Dashboard({
     availablePolyBags,
   );
   const inkPercent = Math.max(0, Math.min(100, supplies.ink));
+  const missingFulfillmentSupplies = [
+    supplies.boxes <= 0 ? "boxes" : null,
+    supplies.tape <= 0 || supplies.tape * tapeCoverage - supplies.tapeUsage <= 0 ? "packing tape" : null,
+    supplies.thankYouCards <= 0 ? "thank-you cards" : null,
+    supplies.polyBags <= 0 ? "poly bags" : null,
+    inkPercent <= 0 ? "ink" : null,
+  ].filter((name): name is string => name !== null);
   const matSales = [
     { label: "Whatupdoe", value: matTotals.whatupdoe, tone: "green" },
     { label: "Did You Call First?", value: matTotals.didYouCall, tone: "blue" },
@@ -834,6 +853,7 @@ export default function Dashboard({
               <a href="#order-queue" onClick={() => setMobileMenuOpen(false)}>
                 Fulfillment queue
               </a>
+              <NotificationSettings isAdmin={session.role === "admin"} />
             </nav>
             <div className="mobile-menu-actions">
               {session.role === "admin" && (
@@ -872,9 +892,6 @@ export default function Dashboard({
       </header>
 
       <div className="page-shell">
-        <div className="notification-toolbar">
-          <NotificationSettings isAdmin={session.role === "admin"} />
-        </div>
         <nav className="dashboard-nav" aria-label="Dashboard sections">
           {session.role === "admin" && (
             <a
@@ -892,6 +909,7 @@ export default function Dashboard({
           <a href="#mat-sales">Mat sales</a>
           <a href="#operations">Payments & deliveries</a>
           <a href="#order-queue">Fulfillment queue</a>
+          <NotificationSettings isAdmin={session.role === "admin"} />
           <a
             href="/marsh-service-agreement.pdf"
             target="_blank"
@@ -1585,8 +1603,10 @@ export default function Dashboard({
                         <td data-label="Quantity">{order.quantity}</td>
                         <td data-label="Status">
                           <StatusBadge status={order.status} />
-                          {blockedMatOrders.has(order.id) && (
-                            <span className="issue-pill mat-shortage-pill">Unable to ship · mat shortage</span>
+                          {order.status === "pending" && (blockedMatOrders.has(order.id) || missingFulfillmentSupplies.length > 0) && (
+                            <span className="issue-pill mat-shortage-pill" title={[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies].filter(Boolean).join(", ")}>
+                              <AlertTriangle size={13} aria-hidden="true" /> Unable to ship · {[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies].filter(Boolean).join(", ")}
+                            </span>
                           )}
                         </td>
                         <td data-label="Tracking">
