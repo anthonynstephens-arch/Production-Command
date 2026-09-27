@@ -35,17 +35,21 @@ export function fulfillmentOverview(input: OverviewInput) {
   const issues = input.blockedCount ? `${input.blockedCount} pending orders are on hold due to fulfillment issues or unavailable supplies, including ${input.issueCount} with flagged issues.` : 'No pending orders are currently blocked by flagged issues or unavailable supplies.';
   const inventory = `On hand: ${supplies.mats} blank mats, ${supplies.boxes} boxes, ${supplies.thankYouCards} thank-you cards, ${supplies.polyBags} poly bags, ${supplies.tape} rolls of tape, and ${supplies.ink}% ink${lowSupplies.length ? `; replenish ${lowSupplies.join(', ')}` : '; no supply shortages are currently identified'}.`;
   const payment = input.balance > 0 ? ` The outstanding balance is ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(input.balance)}.` : '';
-  const latest = new Map<string, RecentIssueEvent>();
-  for (const event of [...(input.recentIssueEvents ?? [])].sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at))) {
-    if (Date.parse(event.occurred_at) >= (input.now ?? Date.now()) - 7 * 86400000 && !latest.has(event.order_id)) latest.set(event.order_id, event);
+  const recent = (input.recentIssueEvents ?? []).filter(event =>
+    Date.parse(event.occurred_at) >= (input.now ?? Date.now()) - 7 * 86400000);
+  const flaggedCount = new Set(recent.filter(event => event.event_type === 'flagged').map(event => event.order_id)).size;
+  const resolvedOrders = new Map<string, RecentIssueEvent>();
+  for (const event of [...recent].sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at))) {
+    if (event.event_type === 'resolved' && !resolvedOrders.has(event.order_id)) resolvedOrders.set(event.order_id, event);
   }
-  const recent = [...latest.values()].slice(0, 5).map(event => {
-    const when = new Date(event.occurred_at).toLocaleString('en-US', { timeZone: 'America/Detroit', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    const reason = `${event.reason}${event.note ? ` — ${event.note}` : ''}`;
-    return event.event_type === 'resolved'
-      ? `Order ${event.order_number}: ${reason}; resolved by ${event.actor_name || 'an unrecorded user'} on ${when} (Detroit time).`
-      : `Order ${event.order_number}: flagged for ${reason} by ${event.actor_name || 'an unrecorded user'} on ${when} (Detroit time); unresolved.`;
-  });
-  const activity = input.recentIssueEvents === null ? 'Recent issue activity is temporarily unavailable.' : recent.length ? `Recent issue activity (last 7 days): ${recent.join(' ')}${latest.size > 5 ? ` Plus ${latest.size - 5} more orders with recent activity; see the fulfillment queue for history.` : ''}` : 'No order issues were flagged or resolved in the last 7 days.';
+  const resolvedBy = new Map<string, number>();
+  for (const event of resolvedOrders.values()) {
+    const name = event.actor_name?.trim() || 'an unrecorded user';
+    resolvedBy.set(name, (resolvedBy.get(name) ?? 0) + 1);
+  }
+  const orderCount = (count: number) => `${count} ${count === 1 ? 'order was' : 'orders were'}`;
+  const resolutions = [...resolvedBy].map(([name, count]) => `${orderCount(count)} resolved by ${name}`).join('; ');
+  const activity = input.recentIssueEvents == null ? 'Recent issue activity is temporarily unavailable.'
+    : `In the last 7 days, ${orderCount(flaggedCount)} flagged with issues. ${resolutions || '0 orders were resolved'}.`;
   return [shipping, production, issues, activity, inventory].join(' ') + payment;
 }
