@@ -39,6 +39,7 @@ import NotificationSettings, {
 } from "./notification-settings";
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
+import OrderIssueHistory from "./order-issue-history";
 
 type Supply = {
   mats: number;
@@ -319,6 +320,8 @@ export default function Dashboard({
   const [issueReason, setIssueReason] = useState("Incomplete address");
   const [issueNote, setIssueNote] = useState("");
   const [issueSaving, setIssueSaving] = useState(false);
+  const [issueHistoryVersion, setIssueHistoryVersion] = useState(0);
+  const [issueError, setIssueError] = useState("");
   const [finishedMats, setFinishedMats] = useState<FinishedMat[]>([]);
   const [inventoryLoaded, setInventoryLoaded] = useState(false);
   const [finishedMatsLoaded, setFinishedMatsLoaded] = useState(false);
@@ -469,6 +472,7 @@ export default function Dashboard({
   };
 
   const flagOrder = async (order: PortalOrder) => {
+    setIssueError("");
     setIssueSaving(true);
     try {
       const response = await fetch("/api/order-issues", {
@@ -484,18 +488,27 @@ export default function Dashboard({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not flag order.");
       setIssueNote("");
+      setIssueHistoryVersion(value => value + 1);
       await loadOperationalData();
+    } catch (error) {
+      setIssueError(error instanceof Error ? error.message : "Could not flag order.");
     } finally {
       setIssueSaving(false);
     }
   };
   const resolveIssue = async (orderId: string) => {
+    setIssueError("");
     setIssueSaving(true);
     try {
-      await fetch(`/api/order-issues?orderId=${encodeURIComponent(orderId)}`, {
+      const response = await fetch(`/api/order-issues?orderId=${encodeURIComponent(orderId)}`, {
         method: "DELETE",
       });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not resolve issue.");
+      setIssueHistoryVersion(value => value + 1);
       await loadOperationalData();
+    } catch (error) {
+      setIssueError(error instanceof Error ? error.message : "Could not resolve issue.");
     } finally {
       setIssueSaving(false);
     }
@@ -1720,6 +1733,8 @@ export default function Dashboard({
                                   )}
                                 </section>
                               </div>
+                              <OrderIssueHistory orderId={order.id} version={issueHistoryVersion} />
+                              {issueError && <p role="alert">{issueError}</p>}
                               {issue ? (
                                 <div className="order-issue-box">
                                   <div>

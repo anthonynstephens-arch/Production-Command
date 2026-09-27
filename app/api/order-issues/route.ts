@@ -6,8 +6,22 @@ import { orderDetailLines } from "@/lib/notifications";
 const ACCOUNT_SLUG = "marsh-supply";
 const reasons = new Set(["Incomplete address", "Cannot ship to PO box", "Address verification failed", "Missing customer information", "Inventory unavailable", "Other"]);
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!await getPortalSession()) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const historyOrderId = new URL(request.url).searchParams.get("historyOrderId");
+  if (historyOrderId) {
+    const db = getSupabaseAdmin();
+    const history: unknown[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await db.from("marsh_order_issue_history").select("*")
+        .eq("account_slug", ACCOUNT_SLUG).eq("order_id", historyOrderId.slice(0, 160))
+        .order("occurred_at", { ascending: false }).order("id").range(offset, offset + 999);
+      if (error) return Response.json({ error: "Could not load issue history." }, { status: 500 });
+      history.push(...(data ?? []));
+      if ((data?.length ?? 0) < 1000) break;
+    }
+    return Response.json({ history });
+  }
   const [{ data, error }, shipstation] = await Promise.all([
     getSupabaseAdmin().from("marsh_order_issues").select("*").eq("account_slug", ACCOUNT_SLUG).is("resolved_at", null).order("created_at", { ascending: false }),
     getShipStationOrders(),
