@@ -1,4 +1,6 @@
 import webpush from "web-push";
+import { fulfillmentOverview } from "./fulfillment-overview";
+import { getMatAvailability } from "./mat-availability";
 import { getSupabaseAdmin } from "./supabase-admin";
 import { getShipStationOrders } from "./shipstation";
 import { buildInvoice } from "./invoice";
@@ -54,7 +56,7 @@ async function queueDailySummary() {
   const db = getSupabaseAdmin();
   const { count } = await db.from("marsh_notification_queue").select("id", { count: "exact", head: true }).eq("event_id", eventId);
   if (count) return;
-  const [shipstation, inventory, issues, state, balance, users, preferences, devices] = await Promise.all([
+  const [shipstation, inventory, issues, state, balance, users, preferences, devices, finishedMats] = await Promise.all([
     getShipStationOrders(),
     db.from("marsh_inventory").select("item_key,quantity").eq("account_slug", "marsh-supply"),
     db.from("marsh_order_issues").select("order_id,order_number,reason,note").eq("account_slug", "marsh-supply").is("resolved_at", null),
@@ -63,8 +65,9 @@ async function queueDailySummary() {
     db.from("marsh_portal_users").select("id,last_login,login_count").eq("active", true),
     db.from("marsh_notification_preferences").select("user_id,email,channel"),
     db.from("marsh_push_subscriptions").select("id,user_id"),
+    db.from("marsh_finished_mats").select("design_key,quantity").eq("account_slug", "marsh-supply"),
   ]);
-  if (!shipstation.connected || inventory.error || issues.error || state.error || balance.error || users.error || preferences.error || devices.error) return;
+  if (!shipstation.connected || inventory.error || issues.error || state.error || balance.error || users.error || preferences.error || devices.error || finishedMats.error) return;
   const orders = shipstation.orders;
   const pending = orders.filter(order => order.status === "pending");
   const pendingById = new Map(pending.map(order => [order.id, order]));
@@ -78,15 +81,29 @@ async function queueDailySummary() {
   const shippedOrders = orders.filter(order => order.status !== "pending" && order.shipDate && new Date(order.shipDate).getTime() >= yesterday);
   const committed = pending.reduce((sum, order) => sum + order.quantity, 0);
   const levels = Object.fromEntries((inventory.data ?? []).map(item => [item.item_key, Number(item.quantity)]));
+  const matAvailability = getMatAvailability(orders, Number(levels.blank_mats || 0), finishedMats.data ?? []);
   const tapeCapacity = Math.max(0, Number(levels.packing_tape || 0) * Math.max(1, Number(levels.packing_tape_coverage || 1)) - Number(levels.packing_tape_usage || 0) - committed);
   const available = {
-    mats: Math.max(0, Number(levels.blank_mats || 0) - committed), boxes: Math.max(0, Number(levels.shipping_boxes || 0) - committed),
+    mats: matAvailability.availableBlanks, boxes: Math.max(0, Number(levels.shipping_boxes || 0) - committed),
     cards: Math.max(0, Number(levels.thank_you_cards || 0) - committed), bags: Math.max(0, Number(levels.poly_bags || 0) - committed), tape: tapeCapacity,
   };
   const capacity = Math.min(available.mats, available.boxes, available.cards, available.bags, available.tape);
+  const missingSupplies = Number(levels.shipping_boxes || 0) <= 0 || Number(levels.thank_you_cards || 0) <= 0 ||
+    Number(levels.poly_bags || 0) <= 0 || Number(levels.ink || 0) <= 0 ||
+    Number(levels.packing_tape || 0) * Math.max(1, Number(levels.packing_tape_coverage || 1)) - Number(levels.packing_tape_usage || 0) <= 0;
+  const heldIds = new Set(activeIssues.map(({ order }) => order.id));
+  for (const order of pending) if (missingSupplies || matAvailability.blockedOrderIds.has(order.id)) heldIds.add(order.id);
+  const lowSupplies = [available.mats <= 0 ? "blank coir mats" : null, available.boxes <= 0 ? "shipping boxes" : null,
+    available.cards <= 0 ? "thank-you cards" : null, available.bags <= 0 ? "poly bags" : null,
+    available.tape <= 0 ? "packing tape" : null, Number(levels.ink || 0) <= 25 ? "black ink" : null].filter((name): name is string => name !== null);
+  const overview = fulfillmentOverview({ orders, inProduction: Number(state.data?.orders_in_production || 0),
+    issueCount: activeIssues.length, blockedCount: heldIds.size, lowSupplies, balance: Number(balance.data || 0),
+    supplies: { mats: Number(levels.blank_mats || 0), boxes: Number(levels.shipping_boxes || 0),
+      thankYouCards: Number(levels.thank_you_cards || 0), polyBags: Number(levels.poly_bags || 0),
+      tape: Number(levels.packing_tape || 0), ink: Number(levels.ink || 0) } });
   const detailItems: Array<{heading:string;lines:string[]}> = [
     { heading: "Last 24 hours", lines: [`New orders: ${newOrders.length}`, `Shipped orders: ${shippedOrders.length}`] },
-    { heading: "Overview", lines: [`Pipeline: ${pending.length} orders (${committed} units)`, `Active shipping issues: ${activeIssues.length}`, `Available capacity: ${capacity} orders`] },
+    { heading: "Overview", lines: [`Pipeline: ${pending.length} orders (${committed} units)`, `Active shipping issues: ${activeIssues.length}`, `Orders on hold: ${heldIds.size}`, `Confirmed delivered in current history: ${orders.filter(order => order.status === "delivered").length}`, `Available capacity: ${capacity} orders`] },
     { heading: "Production and payment", lines: [`Awaiting production: ${Math.max(0, pending.length - Number(state.data?.orders_in_production || 0))} orders`, `In production: ${Number(state.data?.orders_in_production || 0)} orders`, `Balance due: ${currency(Number(balance.data || 0))}`] },
     { heading: "Inventory after commitments", lines: [`Blank mats: ${available.mats}`, `Shipping boxes: ${available.boxes}`, `Packing tape capacity: ${available.tape} mats`, `Thank-you cards: ${available.cards}`, `Poly bags: ${available.bags}`, `Black ink: ${Number(levels.ink || 0)}%`] },
   ];
@@ -96,7 +113,7 @@ async function queueDailySummary() {
       ...orderDetailLines(order),
     ]});
   }
-  const payload = { event_id: eventId, event_type: "daily_summary", category: "broadcast", title: `Production Command · ${day}`, body: `${newOrders.length} new orders and ${shippedOrders.length} shipped in the last 24 hours. ${pending.length} pending orders, ${activeIssues.length} active shipping issues, and capacity for ${capacity} additional orders.`, target_url: origin, button_label: "Open Production Command", detail_items: detailItems };
+  const payload = { event_id: eventId, event_type: "daily_summary", category: "broadcast", title: `Production Command · ${day}`, body: overview, target_url: origin, button_label: "Open Production Command", detail_items: detailItems };
   const rows: Array<Record<string, unknown>> = [];
   for (const pref of preferences.data ?? []) {
     const user = users.data?.find(item => item.id === pref.user_id);

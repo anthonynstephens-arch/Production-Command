@@ -279,3 +279,22 @@
 @media(max-width:1100px){.dashboard .supply-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.dashboard .supply-grid{grid-template-columns:1fr}.dashboard .metrics-grid .metric{min-height:150px}.dashboard .finished-mat-card{min-height:0}}
 @media(max-width:700px){.dashboard .orders-panel .table-wrap{padding:0 6px 8px}.dashboard .orders-panel tr{margin:6px 0;padding:2px 8px}.dashboard .orders-panel td{grid-template-columns:64px minmax(0,1fr);gap:6px;padding:4px 0;font-size:.76rem;line-height:1.18}.dashboard .orders-panel td::before{font-size:.58rem}.dashboard .orders-panel td:first-child strong{font-size:.84rem}.dashboard .orders-panel .order-detail-row>td{padding:5px}.dashboard .order-detail{padding:9px;border-radius:8px}.dashboard .order-detail-heading{margin-bottom:7px;gap:1px}.dashboard .order-detail-heading>strong{font-size:.86rem;line-height:1.2}.dashboard .order-detail-heading>span{font-size:.68rem}.dashboard .order-detail ul{gap:4px}.dashboard .order-detail li{padding:7px 8px;font-size:.76rem;line-height:1.2}.dashboard .order-detail li strong{font-size:.7rem}.dashboard .shipping-details{gap:6px;margin-top:8px}.dashboard .shipping-details section{padding:9px 10px;border-radius:8px}.dashboard .shipping-details section>span{margin-bottom:4px;font-size:.56rem;letter-spacing:.08em}.dashboard .shipping-details strong{font-size:.84rem;line-height:1.22}.dashboard .shipping-details p{margin-bottom:2px;font-size:.72rem;line-height:1.25}.dashboard .order-issue-box{gap:8px;margin-top:8px;padding:9px;border-radius:8px}.dashboard .order-issue-box>div{gap:7px}.dashboard .order-issue-box strong{font-size:.8rem;line-height:1.2}.dashboard .order-issue-box small{font-size:.67rem;line-height:1.25}.dashboard .order-issue-box button{padding:7px 9px;font-size:.72rem}.dashboard .issue-pill{padding:2px 5px;font-size:.56rem}}
+
+/* Fulfillment alerts must override the general green summary style. */
+.dashboard .summary-copy.order-issue-alert,
+.dashboard .summary-copy.mat-shortage-alert {
+  border:2px solid #dc2626;background:#fff1f2;color:#991b1b;
+  animation:fulfillment-alert-pulse 1.5s ease-in-out infinite;
+}
+.dashboard .summary-copy.order-issue-alert svg,
+.dashboard .summary-copy.mat-shortage-alert svg {color:#dc2626;}
+.dashboard .status.on-hold {background:#b91c1c;color:#fff;border:1px solid #991b1b;font-weight:800;}
+.dashboard .status.on-hold i {background:#fff;}
+.dashboard .fulfillment-narrative {margin:16px 0;font-size:1rem;line-height:1.65;color:#285548;}
+@keyframes fulfillment-alert-pulse {
+  0%,100% {border-color:#dc2626;box-shadow:0 0 0 1px rgba(220,38,38,.12);}
+  50% {border-color:#ef4444;box-shadow:0 0 0 5px rgba(220,38,38,.24);}
+}
+@media(prefers-reduced-motion:reduce) {
+  .dashboard .summary-copy.order-issue-alert,.dashboard .summary-copy.mat-shortage-alert {animation:none;}
+}

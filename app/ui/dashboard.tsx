@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +28,7 @@ import {
   Flag,
   CircleCheck,
 } from "lucide-react";
+import { awaitingMatTotal, fulfillmentOverview } from "@/lib/fulfillment-overview";
 import type { PortalOrder } from "@/lib/shipstation";
 import { designKey, getMatAvailability } from "@/lib/mat-availability";
 import type { PortalSession } from "@/lib/auth";
@@ -314,7 +315,6 @@ export default function Dashboard({
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const issueExpansionInitialized = useRef(false);
   const [orderIssues, setOrderIssues] = useState<OrderIssue[]>([]);
   const [issueReason, setIssueReason] = useState("Incomplete address");
   const [issueNote, setIssueNote] = useState("");
@@ -357,10 +357,6 @@ export default function Dashboard({
     if (issuesResponse.ok) {
       const issues: OrderIssue[] = (await issuesResponse.json()).issues ?? [];
       setOrderIssues(issues);
-      if (!issueExpansionInitialized.current) {
-        setExpandedOrderIds(new Set(issues.map((issue) => issue.order_id)));
-        issueExpansionInitialized.current = true;
-      }
     }
     if (matsResponse.ok) {
       setFinishedMats((await matsResponse.json()).designs ?? []);
@@ -598,8 +594,9 @@ export default function Dashboard({
   // cancelled order is deleted upstream, do not keep counting its orphaned
   // issue while the API refresh catches up.
   const currentOrderIssues = useMemo(() => {
-    const orderIds = new Set(orders.map((order) => order.id));
-    const orderNumbers = new Set(orders.map((order) => order.orderNumber));
+    const pending = orders.filter((order) => order.status === "pending");
+    const orderIds = new Set(pending.map((order) => order.id));
+    const orderNumbers = new Set(pending.map((order) => order.orderNumber));
     return orderIssues.filter(
       (issue) =>
         orderIds.has(issue.order_id) || orderNumbers.has(issue.order_number),
@@ -763,6 +760,13 @@ export default function Dashboard({
     counts.pending - ordersInProduction,
   );
   const pipelineOrders = counts.pending;
+  const awaitingMats = awaitingMatTotal(orders, ordersInProduction);
+  const heldOrderIds = new Set(orders.filter(order => order.status === "pending" && (
+    currentOrderIssues.some(issue => issue.order_id === order.id || issue.order_number === order.orderNumber) ||
+    blockedMatOrders.has(order.id) || (inventoryLoaded && missingFulfillmentSupplies.length > 0)
+  )).map(order => order.id));
+  const overview = fulfillmentOverview({ orders, inProduction: ordersInProduction, issueCount: currentOrderIssues.length,
+    blockedCount: heldOrderIds.size, supplies, lowSupplies: lowSupplyNames, balance: balanceOwed });
 
   return (
     <main className="dashboard">
@@ -933,6 +937,7 @@ export default function Dashboard({
               </button>
             )}
           </div>
+          <p className="fulfillment-narrative">{matStockChecked ? overview : "Refreshing the fulfillment overview. Current order and supply totals will appear when the data is available."}</p>
           {blockedMatOrders.size > 0 && (
             <div className="summary-copy mat-shortage-alert" role="status">
               <AlertTriangle size={23} />
@@ -959,16 +964,16 @@ export default function Dashboard({
               </div>
             </div>
           )}
-          {currentOrderIssues.length > 0 && (
+          {heldOrderIds.size > 0 && (
             <a className="summary-copy order-issue-alert" href="#order-queue">
               <Flag size={19} />
               <span>
                 <strong>
-                  {currentOrderIssues.length}{" "}
-                  {currentOrderIssues.length === 1 ? "order is" : "orders are"} unable
+                  {heldOrderIds.size}{" "}
+                  {heldOrderIds.size === 1 ? "order is" : "orders are"} unable
                   to ship.
                 </strong>{" "}
-                Review and resolve the flagged fulfillment issues.
+                Review flagged issues and unavailable supplies in the fulfillment queue.
               </span>
             </a>
           )}
@@ -1289,7 +1294,7 @@ export default function Dashboard({
             </div>
             <div className="metric-value">
               <strong>{ordersAwaitingProduction}</strong>
-              <small>Ready for production</small>
+              <small title={awaitingMats.min !== awaitingMats.max ? "Production is tracked as an order count, not specific orders. The range reflects the possible mat quantity across the orders awaiting production." : undefined}>{awaitingMats.label}</small>
             </div>
           </article>
           <article className="metric production-metric">
@@ -1550,7 +1555,7 @@ export default function Dashboard({
                     ? order.items
                     : [{ name: order.item, quantity: order.quantity }];
                   const issue = currentOrderIssues.find(
-                    (item) => item.order_id === order.id,
+                    (item) => item.order_id === order.id || item.order_number === order.orderNumber,
                   );
                   const address = order.shippingAddress;
                   return (
@@ -1602,7 +1607,7 @@ export default function Dashboard({
                         </td>
                         <td data-label="Quantity">{order.quantity}</td>
                         <td data-label="Status">
-                          <StatusBadge status={order.status} />
+                          {heldOrderIds.has(order.id) ? <span className="status on-hold"><i />ON HOLD</span> : <StatusBadge status={order.status} />}
                           {order.status === "pending" && (blockedMatOrders.has(order.id) || missingFulfillmentSupplies.length > 0) && (
                             <span className="issue-pill mat-shortage-pill" title={[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies].filter(Boolean).join(", ")}>
                               <AlertTriangle size={13} aria-hidden="true" /> Unable to ship · {[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies].filter(Boolean).join(", ")}
