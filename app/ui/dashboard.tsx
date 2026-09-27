@@ -1,4 +1,5 @@
 "use client";
+import type { RecentIssueEvent } from "@/lib/fulfillment-overview";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
@@ -316,6 +317,7 @@ export default function Dashboard({
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [recentIssueEvents, setRecentIssueEvents] = useState<RecentIssueEvent[] | null>(null);
   const [orderIssues, setOrderIssues] = useState<OrderIssue[]>([]);
   const [issueReason, setIssueReason] = useState("Incomplete address");
   const [issueNote, setIssueNote] = useState("");
@@ -358,8 +360,9 @@ export default function Dashboard({
       fetch("/api/finished-mats", { cache: "no-store" }),
     ]);
     if (issuesResponse.ok) {
-      const issues: OrderIssue[] = (await issuesResponse.json()).issues ?? [];
-      setOrderIssues(issues);
+      const data = await issuesResponse.json();
+      setOrderIssues(data.issues ?? []);
+      setRecentIssueEvents(data.recentIssueEvents ?? null);
     }
     if (matsResponse.ok) {
       setFinishedMats((await matsResponse.json()).designs ?? []);
@@ -778,7 +781,7 @@ export default function Dashboard({
     currentOrderIssues.some(issue => issue.order_id === order.id || issue.order_number === order.orderNumber) ||
     blockedMatOrders.has(order.id) || (inventoryLoaded && missingFulfillmentSupplies.length > 0)
   )).map(order => order.id));
-  const overview = fulfillmentOverview({ orders, inProduction: ordersInProduction, issueCount: currentOrderIssues.length,
+  const overview = fulfillmentOverview({ recentIssueEvents, orders, inProduction: ordersInProduction, issueCount: currentOrderIssues.length,
     blockedCount: heldOrderIds.size, supplies, lowSupplies: lowSupplyNames, balance: balanceOwed });
 
   return (

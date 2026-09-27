@@ -1,3 +1,4 @@
+import { getRecentOrderIssues } from "@/lib/recent-order-issues";
 import { getPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getShipStationOrders } from "@/lib/shipstation";
@@ -22,17 +23,18 @@ export async function GET(request: Request) {
     }
     return Response.json({ history });
   }
-  const [{ data, error }, shipstation] = await Promise.all([
+  const [{ data, error }, shipstation, recentIssueEvents] = await Promise.all([
     getSupabaseAdmin().from("marsh_order_issues").select("*").eq("account_slug", ACCOUNT_SLUG).is("resolved_at", null).order("created_at", { ascending: false }),
     getShipStationOrders(),
+    getRecentOrderIssues(),
   ]);
   if (error) return Response.json({ error: "Could not load order issues." }, { status: 500 });
-  if (!shipstation.connected) return Response.json({ issues: data ?? [] });
+  if (!shipstation.connected) return Response.json({ issues: data ?? [], recentIssueEvents });
 
   const orderIds = new Set(shipstation.orders.map(order => order.id));
   const orderNumbers = new Set(shipstation.orders.map(order => order.orderNumber));
   const issues = (data ?? []).filter(issue => orderIds.has(issue.order_id) || orderNumbers.has(issue.order_number));
-  return Response.json({ issues });
+  return Response.json({ issues, recentIssueEvents });
 }
 
 export async function POST(request: Request) {

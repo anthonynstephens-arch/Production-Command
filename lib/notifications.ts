@@ -1,3 +1,4 @@
+import { getRecentOrderIssues } from "./recent-order-issues";
 import webpush from "web-push";
 import { fulfillmentOverview } from "./fulfillment-overview";
 import { getMatAvailability } from "./mat-availability";
@@ -56,7 +57,7 @@ async function queueDailySummary() {
   const db = getSupabaseAdmin();
   const { count } = await db.from("marsh_notification_queue").select("id", { count: "exact", head: true }).eq("event_id", eventId);
   if (count) return;
-  const [shipstation, inventory, issues, state, balance, users, preferences, devices, finishedMats] = await Promise.all([
+  const [shipstation, inventory, issues, state, balance, users, preferences, devices, finishedMats, recentIssueEvents] = await Promise.all([
     getShipStationOrders(),
     db.from("marsh_inventory").select("item_key,quantity").eq("account_slug", "marsh-supply"),
     db.from("marsh_order_issues").select("order_id,order_number,reason,note").eq("account_slug", "marsh-supply").is("resolved_at", null),
@@ -66,6 +67,7 @@ async function queueDailySummary() {
     db.from("marsh_notification_preferences").select("user_id,email,channel"),
     db.from("marsh_push_subscriptions").select("id,user_id"),
     db.from("marsh_finished_mats").select("design_key,quantity").eq("account_slug", "marsh-supply"),
+    getRecentOrderIssues(),
   ]);
   if (!shipstation.connected || inventory.error || issues.error || state.error || balance.error || users.error || preferences.error || devices.error || finishedMats.error) return;
   const orders = shipstation.orders;
@@ -96,7 +98,7 @@ async function queueDailySummary() {
   const lowSupplies = [available.mats <= 0 ? "blank coir mats" : null, available.boxes <= 0 ? "shipping boxes" : null,
     available.cards <= 0 ? "thank-you cards" : null, available.bags <= 0 ? "poly bags" : null,
     available.tape <= 0 ? "packing tape" : null, Number(levels.ink || 0) <= 25 ? "black ink" : null].filter((name): name is string => name !== null);
-  const overview = fulfillmentOverview({ orders, inProduction: Number(state.data?.orders_in_production || 0),
+  const overview = fulfillmentOverview({ recentIssueEvents, orders, inProduction: Number(state.data?.orders_in_production || 0),
     issueCount: activeIssues.length, blockedCount: heldIds.size, lowSupplies, balance: Number(balance.data || 0),
     supplies: { mats: Number(levels.blank_mats || 0), boxes: Number(levels.shipping_boxes || 0),
       thankYouCards: Number(levels.thank_you_cards || 0), polyBags: Number(levels.poly_bags || 0),

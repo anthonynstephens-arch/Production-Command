@@ -8,7 +8,10 @@ export function awaitingMatTotal(orders: PortalOrder[], inProduction: number) {
   return { count, min, max, label: min === max ? `${min} ${min === 1 ? 'mat' : 'mats'} total` : `${min}–${max} mats (range)` };
 }
 
+export type RecentIssueEvent = { order_id: string; order_number: string; event_type: "flagged" | "resolved"; reason: string; note: string | null; actor_name: string | null; occurred_at: string };
+
 type OverviewInput = {
+  recentIssueEvents?: RecentIssueEvent[] | null;
   orders: PortalOrder[];
   inProduction: number;
   issueCount: number;
@@ -32,5 +35,17 @@ export function fulfillmentOverview(input: OverviewInput) {
   const issues = input.blockedCount ? `${input.blockedCount} pending orders are on hold due to fulfillment issues or unavailable supplies, including ${input.issueCount} with flagged issues.` : 'No pending orders are currently blocked by flagged issues or unavailable supplies.';
   const inventory = `On hand: ${supplies.mats} blank mats, ${supplies.boxes} boxes, ${supplies.thankYouCards} thank-you cards, ${supplies.polyBags} poly bags, ${supplies.tape} rolls of tape, and ${supplies.ink}% ink${lowSupplies.length ? `; replenish ${lowSupplies.join(', ')}` : '; no supply shortages are currently identified'}.`;
   const payment = input.balance > 0 ? ` The outstanding balance is ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(input.balance)}.` : '';
-  return [shipping, production, issues, inventory].join(' ') + payment;
+  const latest = new Map<string, RecentIssueEvent>();
+  for (const event of [...(input.recentIssueEvents ?? [])].sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at))) {
+    if (Date.parse(event.occurred_at) >= (input.now ?? Date.now()) - 7 * 86400000 && !latest.has(event.order_id)) latest.set(event.order_id, event);
+  }
+  const recent = [...latest.values()].slice(0, 5).map(event => {
+    const when = new Date(event.occurred_at).toLocaleString('en-US', { timeZone: 'America/Detroit', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const reason = `${event.reason}${event.note ? ` — ${event.note}` : ''}`;
+    return event.event_type === 'resolved'
+      ? `Order ${event.order_number}: ${reason}; resolved by ${event.actor_name || 'an unrecorded user'} on ${when} (Detroit time).`
+      : `Order ${event.order_number}: flagged for ${reason} by ${event.actor_name || 'an unrecorded user'} on ${when} (Detroit time); unresolved.`;
+  });
+  const activity = input.recentIssueEvents === null ? 'Recent issue activity is temporarily unavailable.' : recent.length ? `Recent issue activity (last 7 days): ${recent.join(' ')}${latest.size > 5 ? ` Plus ${latest.size - 5} more orders with recent activity; see the fulfillment queue for history.` : ''}` : 'No order issues were flagged or resolved in the last 7 days.';
+  return [shipping, production, issues, activity, inventory].join(' ') + payment;
 }
