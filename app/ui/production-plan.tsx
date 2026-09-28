@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarDays, Clock3, AlertTriangle, Factory, Save } from "lucide-react";
 
 type MixKey = "whatupdoe" | "did_you_call_first" | "upside_down_welcome" | "marsh_supply";
-type Plan = Record<MixKey, number> & { scheduled_date: string; scheduled_time: string; updated_at: string };
+export type Plan = Record<MixKey, number> & { scheduled_date: string; scheduled_time: string; updated_at: string };
 const designs: { key: MixKey; label: string; tone: string }[] = [
   { key: "whatupdoe", label: "Whatupdoe", tone: "blue" },
   { key: "did_you_call_first", label: "Did You Call First?", tone: "mint" },
@@ -25,21 +25,22 @@ function nextRunDate() {
   return day.toISOString().slice(0, 10);
 }
 
-function prettyDate(date: string) {
+export function prettyDate(date: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
     .format(new Date(`${date}T12:00:00Z`));
 }
 
-function prettyTime(time: string) {
+export function prettyTime(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
-export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, finishedMats }: {
+export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, finishedMats, onPlanChange }: {
   isAdmin: boolean;
   blankMats: number;
   pendingByDesign: Record<string, number>;
   finishedMats: Array<{ design_key: string; quantity: number }>;
+  onPlanChange?: (plan: Plan | null) => void;
 }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
         const data = await response.json();
         if (!active) return;
         setPlan(data.plan ?? null);
+        onPlanChange?.(data.plan ?? null);
         if (data.plan && !editing) {
           setDate(data.plan.scheduled_date);
           setTime(data.plan.scheduled_time.slice(0, 5));
@@ -75,7 +77,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
     load();
     const timer = window.setInterval(load, 30000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [editing]);
+  }, [editing, onPlanChange]);
 
   const total = designs.reduce((sum, { key }) => sum + Number(mix[key] || 0), 0);
   const isPast = Boolean(plan && plan.scheduled_date < detroitToday());
@@ -95,6 +97,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save the plan.");
       setPlan(data.plan);
+      onPlanChange?.(data.plan);
       setEditing(false);
       setMessage("Production plan saved.");
     } catch (error) {
