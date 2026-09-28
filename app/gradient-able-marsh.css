@@ -140,6 +140,70 @@
 .dashboard .delivered-dot { background: #559bf2; }
 .dashboard .open-dot { background: #e9edf4; }
 .dashboard .completion-legend strong { font-size: 1.05rem; }
+.dashboard .production-plan { margin-top: 22px; padding: 26px; overflow: hidden; border: 1px solid #dce5f1; background: linear-gradient(125deg, #ffffff 65%, #f0f6ff); }
+.dashboard .production-plan-intro { display: flex; align-items: center; gap: 15px; }
+.dashboard .production-plan-icon { display: grid; place-items: center; flex: 0 0 51px; width: 51px; height: 51px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, #407ee0, #6956bf); box-shadow: 0 8px 20px #3a69c12a; }
+.dashboard .production-plan-intro h2 { margin: 0; font-size: 1.4rem; }
+.dashboard .production-plan-intro p:last-child { margin: 4px 0 0; color: #65738a; font-size: .88rem; }
+.dashboard .plan-edit-button { margin-left: auto; padding: 10px 15px; min-height: 42px; border: 1px solid #becfec; border-radius: 8px; background: #fff; color: #2f64b6; font-weight: 800; cursor: pointer; }
+.dashboard .plan-edit-button:hover { background: #eef5ff; }
+.dashboard .production-plan-content { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; margin-top: 23px; }
+.dashboard .run-date-card, .dashboard .run-mix-card { min-width: 0; padding: 21px; border: 1px solid #dfe6f1; border-radius: 11px; background: #fff; }
+.dashboard .run-date-card { display: flex; flex-direction: column; justify-content: center; min-height: 185px; }
+.dashboard .run-date-label { color: #5275b2; font-size: .74rem; font-weight: 850; letter-spacing: .12em; }
+.dashboard .run-date-card > strong { margin-top: 10px; font-size: clamp(1.4rem, 2vw, 1.9rem); line-height: 1.18; letter-spacing: -.035em; }
+.dashboard .run-date-card p { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; color: #3d5e91; font-weight: 700; }
+.dashboard .run-date-card small { margin-top: 10px; color: #718097; font-size: .77rem; }
+.dashboard .run-mix-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: .9rem; font-weight: 800; }
+.dashboard .run-mix-heading strong { color: #315fa7; font-size: .82rem; white-space: nowrap; }
+.dashboard .run-mix-bar { display: flex; height: 16px; margin: 19px 0 17px; overflow: hidden; border-radius: 20px; background: #e7edf5; }
+.dashboard .run-mix-bar > span { transition: width .6s ease; }
+.dashboard .run-mix-bar .blue, .dashboard .run-mix-list .blue { background: #4686e0; }
+.dashboard .run-mix-bar .mint, .dashboard .run-mix-list .mint { background: #31c5a7; }
+.dashboard .run-mix-bar .orange, .dashboard .run-mix-list .orange { background: #eeae58; }
+.dashboard .run-mix-bar .purple, .dashboard .run-mix-list .purple { background: #836acc; }
+.dashboard .run-mix-list { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 19px; }
+.dashboard .run-mix-list > div { display: grid; grid-template-columns: 9px minmax(0,1fr) auto; align-items: center; gap: 8px; font-size: .85rem; }
+.dashboard .run-mix-list i { width: 9px; height: 9px; border-radius: 50%; }
+.dashboard .run-mix-list strong { font-size: 1rem; }
+.dashboard .run-empty { margin: 23px 0 0; color: #65738a; font-size: .88rem; line-height: 1.5; }
+.dashboard .plan-warning { display: flex; align-items: flex-start; gap: 8px; margin: 13px 0 0; color: #914b12; font-size: .85rem; font-weight: 700; }
+.dashboard .plan-warning svg { flex: 0 0 auto; }
+.dashboard .production-plan-form { display: grid; gap: 17px; margin-top: 19px; padding: 20px; border: 1px solid #cbd9f0; border-radius: 11px; background: #f5f8ff; }
+.dashboard .plan-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dashboard .plan-quantity-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dashboard .production-plan-form label { display: grid; gap: 7px; color: #36465f; font-size: .86rem; font-weight: 750; }
+.dashboard .production-plan-form input { width: 100%; min-width: 0; min-height: 43px; padding: 8px 11px; border: 1px solid #bfcde0; border-radius: 7px; background: #fff; color: #27364b; }
+.dashboard .plan-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.dashboard .plan-form-footer span { font-weight: 850; }
+.dashboard .plan-form-footer .complete { color: #087f5b; }
+.dashboard .plan-form-footer .incomplete { color: #b22b4b; }
+.dashboard .plan-form-footer button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 43px; padding: 9px 16px; border: 0; border-radius: 8px; background: #3978d6; color: #fff; font-weight: 800; cursor: pointer; }
+.dashboard .plan-form-footer button:disabled { cursor: not-allowed; opacity: .55; }
+.dashboard .plan-feedback { margin: 11px 0 0; font-size: .87rem; font-weight: 700; color: #3b639d; }
+.dashboard .operational-charts { display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; margin-top: 17px; }
+.dashboard .trend-panel, .dashboard .availability-panel { min-width: 0; padding: 24px; }
+.dashboard .trend-visual svg { display: block; width: 100%; height: 190px; overflow: visible; }
+.dashboard .trend-visual polyline { stroke-dasharray: 900; stroke-dashoffset: 900; animation: marsh-line-draw 1.5s ease forwards; }
+.dashboard .trend-labels { display: flex; justify-content: space-between; color: #78869a; font-size: .76rem; font-weight: 700; }
+.dashboard .availability-bars { display: grid; gap: 20px; padding: 4px 0; }
+.dashboard .availability-row > div:first-child { display: flex; justify-content: space-between; gap: 9px; margin-bottom: 7px; font-size: .85rem; font-weight: 700; }
+.dashboard .availability-track { height: 10px; overflow: hidden; border-radius: 20px; background: #e9eef5; }
+.dashboard .availability-track i { display: block; height: 100%; border-radius: inherit; transition: width .7s ease; }
+.dashboard .availability-track .blue { background: linear-gradient(90deg, #548ef0, #3666cf); }
+.dashboard .availability-track .mint { background: linear-gradient(90deg, #49d4ba, #1eaa94); }
+.dashboard .availability-track .orange { background: linear-gradient(90deg, #ffd17c, #e89c4d); }
+.dashboard .availability-track .purple { background: linear-gradient(90deg, #a288ea, #755bbb); }
+.dashboard .availability-note { margin: 22px 0 0; color: #6d7b8c; font-size: .79rem; line-height: 1.4; }
+.dashboard .metrics-grid .metric { transition: transform .25s ease, box-shadow .25s ease; animation: marsh-card-enter .55s both; }
+.dashboard .metrics-grid .metric:nth-child(2) { animation-delay: .06s; }
+.dashboard .metrics-grid .metric:nth-child(3) { animation-delay: .12s; }
+.dashboard .metrics-grid .metric:nth-child(4) { animation-delay: .18s; }
+.dashboard .metrics-grid .metric:nth-child(5) { animation-delay: .24s; }
+.dashboard .metrics-grid .metric:nth-child(6) { animation-delay: .3s; }
+.dashboard .metrics-grid .metric:hover { transform: translateY(-4px); box-shadow: 0 13px 25px rgba(35, 61, 117, .18); }
+@keyframes marsh-card-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes marsh-line-draw { to { stroke-dashoffset: 0; } }
 .dashboard .supply-card { background: #fff; border-top-color: #4487dd; }
 .dashboard .supply-card.low-supply { border-color: #c94760; }
 .dashboard .supply-card .icon-box { color: #3978d6; background: #edf4ff; }
@@ -151,12 +215,16 @@
   .dashboard .page-shell { grid-template-columns: 205px minmax(0,1fr); column-gap: 18px; }
   .dashboard .metrics-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .dashboard .analytics-row { grid-template-columns: 1fr; }
+  .dashboard .production-plan-content, .dashboard .operational-charts { grid-template-columns: 1fr; }
+  .dashboard .plan-quantity-fields { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (max-width: 800px) {
   .dashboard .dashboard-nav { display: none; }
   .dashboard .metrics-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .dashboard .metrics-grid .metric { min-height: 148px; }
   .dashboard .analytics-row { grid-template-columns: 1fr; }
+  .dashboard .production-plan-content, .dashboard .operational-charts { grid-template-columns: 1fr; }
+  .dashboard .plan-quantity-fields { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (max-width: 520px) {
   .dashboard .metrics-grid { grid-template-columns: 1fr 1fr; }
@@ -166,4 +234,16 @@
   .dashboard .analytics-panel { padding: 18px; }
   .dashboard .movement-row { grid-template-columns: minmax(100px, 125px) minmax(0,1fr) 24px; gap: 8px; font-size: .76rem; }
   .dashboard .completion-body { flex-wrap: wrap; }
+  .dashboard .production-plan { padding: 18px; }
+  .dashboard .production-plan-intro { align-items: flex-start; flex-wrap: wrap; }
+  .dashboard .plan-edit-button { width: 100%; margin: 2px 0 0; }
+  .dashboard .run-mix-list { grid-template-columns: 1fr; }
+  .dashboard .plan-date-fields, .dashboard .plan-quantity-fields { grid-template-columns: 1fr 1fr; }
+  .dashboard .plan-form-footer { align-items: stretch; flex-direction: column; }
+  .dashboard .trend-panel, .dashboard .availability-panel { padding: 18px; }
+}
+@media (max-width: 370px) { .dashboard .plan-date-fields, .dashboard .plan-quantity-fields { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard .metrics-grid .metric, .dashboard .trend-visual polyline { animation: none; }
+  .dashboard .metrics-grid .metric, .dashboard .availability-track i, .dashboard .run-mix-bar > span { transition: none; }
 }

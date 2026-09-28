@@ -28,6 +28,7 @@ import {
   Factory,
   Flag,
   CircleCheck,
+  CalendarDays,
 } from "lucide-react";
 import { awaitingMatTotal, fulfillmentOverview } from "@/lib/fulfillment-overview";
 import type { PortalOrder } from "@/lib/shipstation";
@@ -41,6 +42,8 @@ import NotificationSettings, {
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
+import ProductionPlan from "./production-plan";
+import OperationalCharts from "./operational-charts";
 
 type Supply = {
   mats: number;
@@ -864,6 +867,9 @@ export default function Dashboard({
               <a href="#inventory" onClick={() => setMobileMenuOpen(false)}>
                 Inventory
               </a>
+              <a href="#production-plan" onClick={() => setMobileMenuOpen(false)}>
+                Next production run
+              </a>
               <a href="#pipeline" onClick={() => setMobileMenuOpen(false)}>
                 Orders &amp; capacity
               </a>
@@ -930,6 +936,7 @@ export default function Dashboard({
             </a>
           )}
           <a href="#inventory"><Boxes size={18} /> Inventory</a>
+          <a href="#production-plan"><CalendarDays size={18} /> Next production run</a>
           <a href="#pipeline"><Factory size={18} /> Orders &amp; capacity</a>
           <a href="#mat-sales"><TrendingUp size={18} /> Mat sales</a>
           <a href="#operations"><Truck size={18} /> Payments &amp; deliveries</a>
@@ -1242,6 +1249,23 @@ export default function Dashboard({
             </div>
           </article>
         </section>
+
+        <ProductionPlan
+          isAdmin={session.role === "admin" && view === "admin"}
+          blankMats={supplies.mats}
+          pendingByDesign={pendingByDesign}
+          finishedMats={finishedMats}
+        />
+
+        <OperationalCharts
+          orders={orders}
+          availability={[
+            { label: "Blank mats", value: availableMats, tone: "blue" },
+            { label: "Shipping boxes", value: availableBoxes, tone: "mint" },
+            { label: "Poly bags", value: availablePolyBags, tone: "orange" },
+            { label: "Thank-you cards", value: availableThankYouCards, tone: "purple" },
+          ]}
+        />
 
         <article
           className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}
