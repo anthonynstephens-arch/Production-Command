@@ -42,7 +42,7 @@ import NotificationSettings, {
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
-import ProductionPlan from "./production-plan";
+import ProductionPlan, { prettyDate, prettyTime, type Plan } from "./production-plan";
 import OperationalCharts from "./operational-charts";
 
 type Supply = {
@@ -313,6 +313,7 @@ export default function Dashboard({
     {},
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [nextProductionPlan, setNextProductionPlan] = useState<Plan | null | undefined>(undefined);
   const [ordersInProduction, setOrdersInProduction] = useState(0);
   const [productionDraft, setProductionDraft] = useState("0");
   const [productionSaving, setProductionSaving] = useState(false);
@@ -868,7 +869,7 @@ export default function Dashboard({
                 Inventory
               </a>
               <a href="#production-plan" onClick={() => setMobileMenuOpen(false)}>
-                Next production run
+                Next production run <span className="nav-new-badge">NEW</span>
               </a>
               <a href="#pipeline" onClick={() => setMobileMenuOpen(false)}>
                 Orders &amp; capacity
@@ -936,7 +937,7 @@ export default function Dashboard({
             </a>
           )}
           <a href="#inventory"><Boxes size={18} /> Inventory</a>
-          <a href="#production-plan"><CalendarDays size={18} /> Next production run</a>
+          <a href="#production-plan"><CalendarDays size={18} /> Next production run <span className="nav-new-badge">NEW</span></a>
           <a href="#pipeline"><Factory size={18} /> Orders &amp; capacity</a>
           <a href="#mat-sales"><TrendingUp size={18} /> Mat sales</a>
           <a href="#operations"><Truck size={18} /> Payments &amp; deliveries</a>
@@ -966,6 +967,20 @@ export default function Dashboard({
             )}
           </div>
           <p className="fulfillment-narrative">{matStockChecked ? overview : "Refreshing the fulfillment overview. Current order and supply totals will appear when the data is available."}</p>
+          {nextProductionPlan !== undefined && (
+            <a className="summary-copy next-run-overview" href="#production-plan">
+              <CalendarDays size={20} aria-hidden="true" />
+              <span>
+                {nextProductionPlan ? <>
+                  <strong>Next production run is scheduled for {prettyDate(nextProductionPlan.scheduled_date)} at {prettyTime(nextProductionPlan.scheduled_time)} Detroit time.</strong>
+                  {" "}40 mats planned across four designs. View the batch breakdown.
+                </> : <>
+                  <strong>Next production run has not been scheduled.</strong>{" "}
+                  View the 40 mat batch planner.
+                </>}
+              </span>
+            </a>
+          )}
           {blockedMatOrders.size > 0 && (
             <div className="summary-copy mat-shortage-alert" role="status">
               <AlertTriangle size={23} />
@@ -1255,6 +1270,7 @@ export default function Dashboard({
           blankMats={supplies.mats}
           pendingByDesign={pendingByDesign}
           finishedMats={finishedMats}
+          onPlanChange={setNextProductionPlan}
         />
 
         <OperationalCharts
