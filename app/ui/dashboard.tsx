@@ -1091,6 +1091,198 @@ export default function Dashboard({
           </div>
         )}
 
+        <div
+          className="dashboard-section-heading pipeline-heading"
+          id="pipeline"
+        >
+          <div>
+            <span className="section-icon">
+              <PackageOpen size={18} />
+            </span>
+            <h2>Order Pipeline</h2>
+          </div>
+          <p>Current fulfillment movement at a glance</p>
+        </div>
+        <section className="metrics-grid">
+          <article className="metric">
+            <div className="metric-heading">
+              <span className="metric-icon amber">
+                <PackageOpen size={23} />
+              </span>
+              <p>Orders awaiting production</p>
+            </div>
+            <div className="metric-value">
+              <strong>{ordersAwaitingProduction}</strong>
+              <small title={awaitingMats.min !== awaitingMats.max ? "Production is tracked as an order count, not specific orders. The range reflects the possible mat quantity across the orders awaiting production." : undefined}>{awaitingMats.label}</small>
+            </div>
+          </article>
+          <article className="metric production-metric">
+            <div className="metric-heading">
+              <span className="metric-icon violet">
+                <Factory size={23} />
+              </span>
+              <p>Orders in production</p>
+            </div>
+            <div className="metric-value">
+              <strong>{ordersInProduction}</strong>
+              <small>Currently being produced</small>
+              {session.role === "admin" && view === "admin" && (
+                <div className="production-adjust">
+                  <input
+                    aria-label="Orders currently in production"
+                    type="number"
+                    min="0"
+                    max={counts.pending}
+                    step="1"
+                    value={productionDraft}
+                    onChange={(event) => setProductionDraft(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveProductionCount}
+                    disabled={productionSaving}
+                  >
+                    {productionSaving ? "Saving…" : "Set"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </article>
+          <article className="metric">
+            <div className="metric-heading">
+              <span className="metric-icon blue">
+                <Truck size={23} />
+              </span>
+              <p>Orders shipped</p>
+            </div>
+            <div className="metric-value">
+              <strong>{counts.shipped}</strong>
+              <small>In carrier network</small>
+            </div>
+          </article>
+          <article className="metric">
+            <div className="metric-heading">
+              <span className="metric-icon green">
+                <PackageCheck size={23} />
+              </span>
+              <p>Orders delivered</p>
+            </div>
+            <div className="metric-value">
+              <strong>{counts.delivered}</strong>
+              <small>Successfully completed</small>
+            </div>
+          </article>
+          <article className="metric">
+            <div className="metric-heading">
+              <span className="metric-icon violet">
+                <TrendingUp size={23} />
+              </span>
+              <p>Total units</p>
+            </div>
+            <div className="metric-value">
+              <strong>{counts.units}</strong>
+              <small>Across visible orders</small>
+            </div>
+          </article>
+          <article className="metric issues-metric">
+            <div className="metric-heading">
+              <span className="metric-icon red">
+                <Flag size={23} />
+              </span>
+              <p>Orders with issues</p>
+            </div>
+            <div className="metric-value">
+              <strong>{currentOrderIssues.length}</strong>
+              <small>Resolve issues to ship</small>
+            </div>
+          </article>
+        </section>
+
+        <section className="analytics-row" aria-label="Order analytics">
+          <article className="panel analytics-panel">
+            <div className="analytics-heading">
+              <div>
+                <p className="eyebrow">CURRENT QUEUE</p>
+                <h2>Order movement</h2>
+              </div>
+              <strong>{orders.length} <span>loaded orders</span></strong>
+            </div>
+            <div className="movement-chart">
+              {[
+                { label: "Awaiting production", value: ordersAwaitingProduction, tone: "amber" },
+                { label: "In production", value: ordersInProduction, tone: "violet" },
+                { label: "Shipped", value: counts.shipped, tone: "blue" },
+                { label: "Delivered", value: counts.delivered, tone: "green" },
+              ].map((item) => (
+                <div className="movement-row" key={item.label}>
+                  <span>{item.label}</span>
+                  <div className="movement-track" role="img" aria-label={`${item.label}: ${item.value} orders`}>
+                    <i className={item.tone} style={{ width: `${orders.length ? Math.max(item.value > 0 ? 2 : 0, item.value / orders.length * 100) : 0}%` }} />
+                  </div>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="panel analytics-panel completion-panel">
+            <div className="analytics-heading">
+              <div>
+                <p className="eyebrow">FULFILLMENT</p>
+                <h2>Delivered orders</h2>
+              </div>
+            </div>
+            <div className="completion-body">
+              <div className="completion-donut" role="img" aria-label={`${counts.delivered} of ${orders.length} loaded orders delivered`} style={{ "--completion": `${orders.length ? counts.delivered / orders.length * 100 : 0}%` } as React.CSSProperties}>
+                <div><strong>{orders.length ? Math.round(counts.delivered / orders.length * 100) : 0}%</strong><span>delivered</span></div>
+              </div>
+              <div className="completion-legend">
+                <div><i className="delivered-dot" /><span>Delivered</span><strong>{counts.delivered}</strong></div>
+                <div><i className="open-dot" /><span>Other statuses</span><strong>{Math.max(0, orders.length - counts.delivered)}</strong></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <article
+          className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}
+        >
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p>
+              <h2>{availableCapacity} orders</h2>
+            </div>
+            <span className="icon-box">
+              <Settings2 size={19} />
+            </span>
+          </div>
+          <p>
+            After reserving supplies for{" "}
+            <strong>{committedUnits} pending units</strong>, you can accept up
+            to <strong>{availableCapacity} additional single-mat orders</strong>
+            .
+          </p>
+          {capacityBlockers.length > 0 ? (
+            <div className="capacity-blockers">
+              <strong>Fulfillment is blocked by:</strong>
+              <ul>
+                {capacityBlockers.map((supply) => (
+                  <li key={supply.label}>
+                    <AlertTriangle size={20} />
+                    <span>
+                      <b>{supply.available}</b> {supply.label} available
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="capacity-clear">
+              <PackageCheck size={21} />
+              <strong>All required supplies are available.</strong>
+            </div>
+          )}
+        </article>
+
         <div className="dashboard-section-heading" id="inventory">
           <div>
             <span className="section-icon">
@@ -1292,153 +1484,6 @@ export default function Dashboard({
             </article>
           )}
         </section>
-
-        <div
-          className="dashboard-section-heading pipeline-heading"
-          id="pipeline"
-        >
-          <div>
-            <span className="section-icon">
-              <PackageOpen size={18} />
-            </span>
-            <h2>Order Pipeline</h2>
-          </div>
-          <p>Current fulfillment movement at a glance</p>
-        </div>
-        <section className="metrics-grid">
-          <article className="metric">
-            <div className="metric-heading">
-              <span className="metric-icon amber">
-                <PackageOpen size={23} />
-              </span>
-              <p>Orders awaiting production</p>
-            </div>
-            <div className="metric-value">
-              <strong>{ordersAwaitingProduction}</strong>
-              <small title={awaitingMats.min !== awaitingMats.max ? "Production is tracked as an order count, not specific orders. The range reflects the possible mat quantity across the orders awaiting production." : undefined}>{awaitingMats.label}</small>
-            </div>
-          </article>
-          <article className="metric production-metric">
-            <div className="metric-heading">
-              <span className="metric-icon violet">
-                <Factory size={23} />
-              </span>
-              <p>Orders in production</p>
-            </div>
-            <div className="metric-value">
-              <strong>{ordersInProduction}</strong>
-              <small>Currently being produced</small>
-              {session.role === "admin" && view === "admin" && (
-                <div className="production-adjust">
-                  <input
-                    aria-label="Orders currently in production"
-                    type="number"
-                    min="0"
-                    max={counts.pending}
-                    step="1"
-                    value={productionDraft}
-                    onChange={(event) => setProductionDraft(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={saveProductionCount}
-                    disabled={productionSaving}
-                  >
-                    {productionSaving ? "Saving…" : "Set"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </article>
-          <article className="metric">
-            <div className="metric-heading">
-              <span className="metric-icon blue">
-                <Truck size={23} />
-              </span>
-              <p>Orders shipped</p>
-            </div>
-            <div className="metric-value">
-              <strong>{counts.shipped}</strong>
-              <small>In carrier network</small>
-            </div>
-          </article>
-          <article className="metric">
-            <div className="metric-heading">
-              <span className="metric-icon green">
-                <PackageCheck size={23} />
-              </span>
-              <p>Orders delivered</p>
-            </div>
-            <div className="metric-value">
-              <strong>{counts.delivered}</strong>
-              <small>Successfully completed</small>
-            </div>
-          </article>
-          <article className="metric">
-            <div className="metric-heading">
-              <span className="metric-icon violet">
-                <TrendingUp size={23} />
-              </span>
-              <p>Total units</p>
-            </div>
-            <div className="metric-value">
-              <strong>{counts.units}</strong>
-              <small>Across visible orders</small>
-            </div>
-          </article>
-          <article className="metric issues-metric">
-            <div className="metric-heading">
-              <span className="metric-icon red">
-                <Flag size={23} />
-              </span>
-              <p>Orders with issues</p>
-            </div>
-            <div className="metric-value">
-              <strong>{currentOrderIssues.length}</strong>
-              <small>Resolve issues to ship</small>
-            </div>
-          </article>
-        </section>
-
-        <article
-          className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}
-        >
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p>
-              <h2>{availableCapacity} orders</h2>
-            </div>
-            <span className="icon-box">
-              <Settings2 size={19} />
-            </span>
-          </div>
-          <p>
-            After reserving supplies for{" "}
-            <strong>{committedUnits} pending units</strong>, you can accept up
-            to <strong>{availableCapacity} additional single-mat orders</strong>
-            .
-          </p>
-          {capacityBlockers.length > 0 ? (
-            <div className="capacity-blockers">
-              <strong>Fulfillment is blocked by:</strong>
-              <ul>
-                {capacityBlockers.map((supply) => (
-                  <li key={supply.label}>
-                    <AlertTriangle size={20} />
-                    <span>
-                      <b>{supply.available}</b> {supply.label} available
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="capacity-clear">
-              <PackageCheck size={21} />
-              <strong>All required supplies are available.</strong>
-            </div>
-          )}
-        </article>
 
         <div
           className="dashboard-section-heading product-heading"
