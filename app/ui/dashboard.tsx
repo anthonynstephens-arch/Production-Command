@@ -847,6 +847,9 @@ export default function Dashboard({
               {connected ? "ShipStation connected" : "ShipStation setup needed"}
             </div>
             <nav aria-label="Mobile dashboard sections">
+              <a href="#overview" onClick={() => setMobileMenuOpen(false)}>
+                Overview
+              </a>
               {session.role === "admin" && (
                 <a
                   href="#portal-users"
@@ -913,6 +916,8 @@ export default function Dashboard({
 
       <div className="page-shell">
         <nav className="dashboard-nav" aria-label="Dashboard sections">
+          <div className="dashboard-nav-heading">WORKSPACE <span>Marsh Supply</span></div>
+          <a href="#overview"><RectangleHorizontal size={18} /> Overview</a>
           {session.role === "admin" && (
             <a
               href="#portal-users"
@@ -921,14 +926,14 @@ export default function Dashboard({
                 setMobileMenuOpen(false);
               }}
             >
-              Manage users
+              <ShieldCheck size={18} /> Manage users
             </a>
           )}
-          <a href="#inventory">Inventory</a>
-          <a href="#pipeline">Orders & capacity</a>
-          <a href="#mat-sales">Mat sales</a>
-          <a href="#operations">Payments & deliveries</a>
-          <a href="#order-queue">Fulfillment queue</a>
+          <a href="#inventory"><Boxes size={18} /> Inventory</a>
+          <a href="#pipeline"><Factory size={18} /> Orders &amp; capacity</a>
+          <a href="#mat-sales"><TrendingUp size={18} /> Mat sales</a>
+          <a href="#operations"><Truck size={18} /> Payments &amp; deliveries</a>
+          <a href="#order-queue"><PackageCheck size={18} /> Fulfillment queue</a>
           <NotificationSettings isAdmin={session.role === "admin"} />
           <a
             href="/marsh-service-agreement.pdf"
@@ -936,10 +941,10 @@ export default function Dashboard({
             rel="noreferrer"
             onClick={() => setMobileMenuOpen(false)}
           >
-            Service Agreement
+            <ShieldCheck size={18} /> Service Agreement
           </a>
         </nav>
-        <section className="overview-summary">
+        <section className="overview-summary" id="overview">
           <div className="overview-topline">
             <p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>
             {session.role === "admin" && (
