@@ -73,15 +73,15 @@
   border-radius: 8px;
   padding: 20px 22px;
   color: #fff;
-  background: #2874d4;
+  background: linear-gradient(120deg, #3075d0, #2259b4);
   box-shadow: 0 4px 12px rgba(47, 101, 185, .13);
 }
-.dashboard .metrics-grid .metric:nth-child(1) { background: #ffbd67; }
-.dashboard .metrics-grid .metric:nth-child(2) { background: #6e58bb; }
-.dashboard .metrics-grid .metric:nth-child(3) { background: #2874d4; }
-.dashboard .metrics-grid .metric:nth-child(4) { background: #31c9a9; }
-.dashboard .metrics-grid .metric:nth-child(5) { background: #4567c8; }
-.dashboard .metrics-grid .metric:nth-child(6) { background: #bd3454; }
+.dashboard .metrics-grid .metric:nth-child(1) { background: linear-gradient(120deg, #ffd485, #ffb45b); }
+.dashboard .metrics-grid .metric:nth-child(2) { background: linear-gradient(120deg, #765fbd, #5944a3); }
+.dashboard .metrics-grid .metric:nth-child(3) { background: linear-gradient(120deg, #3075d0, #2259b4); }
+.dashboard .metrics-grid .metric:nth-child(4) { background: linear-gradient(120deg, #55dcba, #28baa1); }
+.dashboard .metrics-grid .metric:nth-child(5) { background: linear-gradient(120deg, #5277d1, #3c5aba); }
+.dashboard .metrics-grid .metric:nth-child(6) { background: linear-gradient(120deg, #c84062, #a82346); }
 .dashboard .metrics-grid .metric p,
 .dashboard .metrics-grid .metric strong,
 .dashboard .metrics-grid .metric small { color: #172d47; }
