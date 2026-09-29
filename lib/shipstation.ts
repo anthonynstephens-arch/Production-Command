@@ -15,7 +15,7 @@ export type PortalOrder = {
   customerEmail?: string;
   customerPhone?: string;
   shippingAddress?: { name?: string; company?: string; street1?: string; street2?: string; street3?: string; city?: string; state?: string; postalCode?: string; country?: string };
-  items?: Array<{ name: string; quantity: number }>;
+  items?: Array<{ name: string; quantity: number; options?: Array<{ name: string; value: string }> }>;
 };
 
 type ShipStationOrder = {
@@ -25,7 +25,7 @@ type ShipStationOrder = {
   ship_to?: { name?: string; company_name?: string; address_line1?: string; address_line2?: string; address_line3?: string; city_locality?: string; state_province?: string; postal_code?: string; country_code?: string; phone?: string; email?: string };
   bill_to?: { name?: string };
   customer_name?: string;
-  items?: Array<{ name?: string; quantity?: number }>;
+  items?: Array<{ name?: string; quantity?: number; options?: Array<{ name?: string; value?: string }> }>;
   created_at?: string;
   ordered_at?: string;
   shipped_at?: string;
@@ -50,7 +50,7 @@ type LegacyShipStationOrder = {
   carrierCode?: string;
   serviceCode?: string;
   customerEmail?: string;
-  items?: Array<{ name?: string; quantity?: number }>;
+  items?: Array<{ name?: string; quantity?: number; options?: Array<{ name?: string; value?: string }> }>;
 };
 
 type LegacyShipStationShipment = {
@@ -72,11 +72,24 @@ const demoOrders: PortalOrder[] = [
   { id: "demo-4", orderNumber: "MS-1079", customer: "Terrence Williams", item: "Whatupdoe Welcome Mat", quantity: 1, status: "delivered", orderDate: "2026-09-06T15:35:00Z", shipDate: "2026-09-08T12:30:00Z", trackingNumber: "9400111899560000001024", carrier: "USPS" },
 ];
 
-type RawLineItem = { name?: string; quantity?: number };
+type RawLineItem = {
+  name?: string;
+  quantity?: number;
+  options?: Array<{ name?: string; value?: string }>;
+};
 
 function fulfillmentItems(items?: RawLineItem[]) {
   return (items ?? [])
-    .map(item => ({ name: item.name?.trim() || "Marsh Supply order", quantity: Math.max(0, Number(item.quantity ?? 1)) }))
+    .map(item => ({
+      name: item.name?.trim() || "Marsh Supply order",
+      quantity: Math.max(0, Number(item.quantity ?? 1)),
+      options: (item.options ?? [])
+        .map(option => ({
+          name: String(option.name || "").trim(),
+          value: String(option.value || "").trim(),
+        }))
+        .filter(option => option.name && option.value),
+    }))
     .filter(item => item.quantity > 0 && !/^(discount|coupon|promo(?:tion)?|order discount|automatic discount|price adjustment)(?:\b|\s*[:—–-])/i.test(item.name));
 }
 
