@@ -29,6 +29,7 @@ import {
   Flag,
   CircleCheck,
   CalendarDays,
+  Palette,
 } from "lucide-react";
 import { awaitingMatTotal, fulfillmentOverview } from "@/lib/fulfillment-overview";
 import type { PortalOrder } from "@/lib/shipstation";
@@ -44,6 +45,7 @@ import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
 import ProductionPlan, { prettyDate, prettyTime, type Plan } from "./production-plan";
 import OperationalCharts from "./operational-charts";
+import DesignStudioSubmissions from "./design-studio-submissions";
 
 type Supply = {
   mats: number;
@@ -865,6 +867,17 @@ export default function Dashboard({
                   Manage users
                 </a>
               )}
+              {session.role === "admin" && (
+                <a
+                  href="#design-studio-submissions"
+                  onClick={() => {
+                    setView("admin");
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  Design Studio <span className="nav-new-badge">NEW</span>
+                </a>
+              )}
               <a href="#inventory" onClick={() => setMobileMenuOpen(false)}>
                 Inventory
               </a>
@@ -934,6 +947,11 @@ export default function Dashboard({
               }}
             >
               <ShieldCheck size={18} /> Manage users
+            </a>
+          )}
+          {session.role === "admin" && (
+            <a href="#design-studio-submissions" onClick={() => setView("admin")}>
+              <Palette size={18} /> Design Studio <span className="nav-new-badge">NEW</span>
             </a>
           )}
           <a href="#inventory"><Boxes size={18} /> Inventory</a>
@@ -1612,6 +1630,10 @@ export default function Dashboard({
             onBalanceChange={setBalanceOwed}
           />
         </div>
+
+        {session.role === "admin" && view === "admin" && (
+          <DesignStudioSubmissions orders={orders} />
+        )}
 
         <section className="panel orders-panel" id="order-queue">
           <div className="orders-head">
