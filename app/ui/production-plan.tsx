@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { countdownText, dryingSeconds, stageAt, stageLabels, type ProductionStage } from "@/lib/production-run";
+import { useRunClock } from "./production-run-status";
+import type { Plan } from "@/lib/production-run";
+export type { Plan } from "@/lib/production-run";
 import { CalendarDays, Clock3, AlertTriangle, Factory, Save } from "lucide-react";
 
 type MixKey = "whatupdoe" | "did_you_call_first" | "upside_down_welcome" | "marsh_supply";
-export type Plan = Record<MixKey, number> & { scheduled_date: string; scheduled_time: string; updated_at: string };
 const designs: { key: MixKey; label: string; tone: string }[] = [
   { key: "whatupdoe", label: "Whatupdoe", tone: "blue" },
   { key: "did_you_call_first", label: "Did You Call First?", tone: "mint" },
@@ -50,16 +53,24 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   const [mix, setMix] = useState<Record<MixKey, number>>({ whatupdoe: 10, did_you_call_first: 10, upside_down_welcome: 10, marsh_supply: 10 });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [editVersion, setEditVersion] = useState<string | null>(null);
+  const mutation = useRef({ busy: false, version: 0 });
+  const now = useRunClock(plan);
+  const currentStage = plan ? stageAt(plan, now) : "scheduled";
+  const canSchedule = !plan || currentStage === "scheduled" || currentStage === "completed";
 
   useEffect(() => {
-    setDate(nextRunDate());
+    if (!editing) setDate(nextRunDate());
     let active = true;
     const load = async () => {
+      if (mutation.current.busy) return;
+      const version = mutation.current.version;
       try {
         const response = await fetch("/api/production-plan", { cache: "no-store" });
         if (!response.ok) throw new Error("The production plan could not be loaded.");
         const data = await response.json();
-        if (!active) return;
+        if (!active || mutation.current.busy || version !== mutation.current.version) return;
         setPlan(data.plan ?? null);
         onPlanChange?.(data.plan ?? null);
         if (data.plan && !editing) {
@@ -67,20 +78,20 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
           setTime(data.plan.scheduled_time.slice(0, 5));
           setMix(Object.fromEntries(designs.map(({ key }) => [key, data.plan[key]])) as Record<MixKey, number>);
         }
-        setMessage("");
+        setLoadError("");
       } catch (error) {
-        if (active) setMessage(error instanceof Error ? error.message : "Could not load the plan.");
+        if (active && !mutation.current.busy && version === mutation.current.version) setLoadError(error instanceof Error ? error.message : "Could not load the plan.");
       } finally {
         if (active) setLoading(false);
       }
     };
     load();
-    const timer = window.setInterval(load, 30000);
+    const timer = window.setInterval(load, 10000);
     return () => { active = false; window.clearInterval(timer); };
   }, [editing, onPlanChange]);
 
   const total = designs.reduce((sum, { key }) => sum + Number(mix[key] || 0), 0);
-  const isPast = Boolean(plan && plan.scheduled_date < detroitToday());
+  const isPast = Boolean(plan && currentStage === "scheduled" && plan.scheduled_date < detroitToday());
   const shortages = plan ? designs.filter(({ key }) => {
     const finished = finishedMats.find((mat) => mat.design_key === key)?.quantity ?? 0;
     return Math.max(0, (pendingByDesign[key.replaceAll("_", "-")] ?? 0) - finished) > plan[key];
@@ -90,10 +101,11 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
     event.preventDefault();
     if (total !== 40) { setMessage("The four designs must total exactly 40 mats."); return; }
     setSaving(true);
+    mutation.current = { busy: true, version: mutation.current.version + 1 };
     setMessage("");
     try {
       const response = await fetch("/api/production-plan", { method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduled_date: date, scheduled_time: time, ...mix }) });
+        body: JSON.stringify({ scheduled_date: date, scheduled_time: time, ...mix, expected_updated_at: editVersion }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save the plan.");
       setPlan(data.plan);
@@ -102,7 +114,35 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
       setMessage("Production plan saved.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save the plan.");
-    } finally { setSaving(false); }
+    } finally { mutation.current.busy = false; setSaving(false); }
+  };
+
+  const updateStage = async (stage: ProductionStage) => {
+    if (!plan || saving) return;
+    setSaving(true);
+    mutation.current = { busy: true, version: mutation.current.version + 1 };
+    setMessage("");
+    try {
+      const response = await fetch("/api/production-plan", { method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: plan.run_id, stage }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not update the stage.");
+      setPlan(data.plan);
+      onPlanChange?.(data.plan);
+      setMessage(stageLabels[stage] + " saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update the stage.");
+    } finally { mutation.current.busy = false; setSaving(false); }
+  };
+  const toggleEditor = () => {
+    if (saving) return;
+    setEditVersion(plan?.updated_at ?? null);
+    if (!editing && (!plan || currentStage === "completed")) {
+      setDate(nextRunDate());
+      setTime("09:00");
+    }
+    setEditing(value => !value);
+    setMessage("");
   };
 
   return (
@@ -110,18 +150,18 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
       <div className="production-plan-intro">
         <span className="production-plan-icon"><Factory size={25} /></span>
         <div>
-          <p className="eyebrow">NEXT 40 MAT BATCH</p>
+          <p className="eyebrow">40 MAT PRODUCTION RUN</p>
           <h2 id="production-plan-title">Production schedule</h2>
           <p>Four designs · one 40 mat run · Detroit time</p>
         </div>
-        {isAdmin && <button type="button" className="plan-edit-button" onClick={() => setEditing((value) => !value)}>
-          {editing ? "Close editor" : plan ? "Edit schedule" : "Schedule run"}
+        {isAdmin && canSchedule && !loading && <button type="button" disabled={saving} className="plan-edit-button" onClick={toggleEditor}>
+          {editing ? "Close editor" : currentStage === "completed" ? "Schedule next run" : plan ? "Edit schedule" : "Schedule run"}
         </button>}
       </div>
 
       <div className="production-plan-content">
         <div className="run-date-card">
-          <span className="run-date-label">{loading ? "LOADING SCHEDULE" : isPast ? "NEEDS RESCHEDULING" : plan ? "NEXT SCHEDULED RUN" : "NOT YET SCHEDULED"}</span>
+          <span className="run-date-label">{loading ? "LOADING SCHEDULE" : isPast ? "SCHEDULE OVERDUE" : plan ? stageLabels[currentStage] : "NOT YET SCHEDULED"}</span>
           <strong>{plan ? prettyDate(plan.scheduled_date) : "No run scheduled"}</strong>
           <p><Clock3 size={17} /> {plan ? `${prettyTime(plan.scheduled_time)} Detroit time` : "Monday · Wednesday · Friday"}</p>
           {!plan && !loading && <small>Next eligible day: {prettyDate(nextRunDate())}. An admin must confirm the date and 40 mat mix.</small>}
@@ -138,16 +178,54 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
         </div>
       </div>
 
-      {plan && blankMats < 40 && <p className="plan-warning"><AlertTriangle size={17} /> {40 - blankMats} more blank mats are needed for this run. The plan does not reserve inventory.</p>}
-      {plan && shortages.length > 0 && <p className="plan-warning"><AlertTriangle size={17} /> Pending demand exceeds this batch mix for {shortages.map((item) => item.label).join(", ")}. Review the quantities before production.</p>}
-      {isPast && <p className="plan-warning"><CalendarDays size={17} /> This scheduled date has passed. Set the next run before sharing it as the upcoming batch.</p>}
+      {plan && <div className="run-progress">
+        <div className="run-progress-heading"><span>Current stage</span><strong>{stageLabels[currentStage]}</strong></div>
+        <ol className="run-stage-list" aria-label="Production stages">
+          {(["printing", "drying", "packaging"] as const).map((stage, index) => {
+            const rank = ["scheduled", "printing", "drying", "packaging", "completed"].indexOf(currentStage);
+            const reached = rank > index;
+            const available = isAdmin && !saving && !editing && (
+              (stage === "printing" && currentStage === "scheduled") ||
+              (stage === "drying" && currentStage === "printing"));
+            return <li key={stage} className={currentStage === stage ? "active" : reached ? "done" : ""}>
+              <button type="button" disabled={!available} aria-current={currentStage === stage ? "step" : undefined}
+                onClick={() => void updateStage(stage)}>
+                <span className="run-stage-number">{reached && currentStage !== stage ? "✓" : index + 1}</span>
+                <strong>{stageLabels[stage]}</strong>
+                {available && <small>Mark current stage</small>}
+                {currentStage === stage && <small>In progress</small>}
+              </button>
+            </li>;
+          })}
+        </ol>
+        {currentStage === "drying" && <div className="drying-countdown">
+          <Clock3 size={22}/><div><span>Drying time remaining</span>
+          <strong role="timer" aria-live="off">{countdownText(dryingSeconds(plan, now))}</strong>
+          <small>Automatically moves to PACKAGING FOR SHIPMENT after 24 hours.</small></div>
+          <progress max={86400} value={86400 - Math.min(86400, dryingSeconds(plan, now))} aria-label="Drying progress"/>
+        </div>}
+        {isAdmin ? <label className="run-completed-check">
+          <input type="checkbox" checked={currentStage === "completed"}
+            disabled={saving || editing || currentStage !== "packaging"}
+            onChange={event => { if (event.target.checked) void updateStage("completed"); }}/>
+          <span><strong>Completed</strong><small>{currentStage === "completed" && plan.completed_at
+            ? "Packing finished · " + new Date(plan.completed_at).toLocaleString("en-US", { timeZone: "America/Detroit" })
+            : "Check when packaging for shipment is finished."}</small></span>
+        </label> : currentStage === "completed" ? <p className="run-complete-note">Packing finished · Run completed</p> : null}
+        {saving && <p role="status" className="plan-feedback">Saving production update…</p>}
+      </div>}
 
-      {isAdmin && editing && <form className="production-plan-form" onSubmit={save}>
+      {plan && currentStage === "scheduled" && blankMats < 40 && <p className="plan-warning"><AlertTriangle size={17} /> {40 - blankMats} more blank mats are needed for this run. The plan does not reserve inventory.</p>}
+      {plan && currentStage === "scheduled" && shortages.length > 0 && <p className="plan-warning"><AlertTriangle size={17} /> Pending demand exceeds this batch mix for {shortages.map((item) => item.label).join(", ")}. Review the quantities before production.</p>}
+      {isPast && <p className="plan-warning"><CalendarDays size={17} /> This scheduled date has passed. Update the schedule or mark PRINTING when this run begins.</p>}
+
+      {isAdmin && canSchedule && editing && <form className="production-plan-form" onSubmit={save}>
         <div className="plan-date-fields"><label>Run date <input type="date" required min={detroitToday()} value={date} onChange={(event) => setDate(event.target.value)} /></label>
           <label>Start time · Detroit <input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label></div>
         <div className="plan-quantity-fields">{designs.map(({ key, label }) => <label key={key}>{label}<input type="number" min="0" max="40" step="1" required value={mix[key]} onChange={(event) => setMix({ ...mix, [key]: Number(event.target.value) })} /></label>)}</div>
         <div className="plan-form-footer"><span className={total === 40 ? "complete" : "incomplete"}>{total} / 40 mats planned</span><button type="submit" disabled={saving || total !== 40}><Save size={16} /> {saving ? "Saving…" : "Save production run"}</button></div>
       </form>}
+      {loadError && <p className="plan-warning" role="alert">{loadError}</p>}
       {message && <p className="plan-feedback" role="status">{message}</p>}
     </section>
   );

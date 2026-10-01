@@ -30,7 +30,7 @@ import {
   CircleCheck,
   CalendarDays,
 } from "lucide-react";
-import { awaitingMatTotal, fulfillmentOverview } from "@/lib/fulfillment-overview";
+import { awaitingMatTotal } from "@/lib/fulfillment-overview";
 import type { PortalOrder } from "@/lib/shipstation";
 import { designKey, getMatAvailability } from "@/lib/mat-availability";
 import type { PortalSession } from "@/lib/auth";
@@ -42,7 +42,8 @@ import NotificationSettings, {
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
-import ProductionPlan, { prettyDate, prettyTime, type Plan } from "./production-plan";
+import ProductionPlan, { type Plan } from "./production-plan";
+import ProductionRunStatus from "./production-run-status";
 import OperationalCharts from "./operational-charts";
 
 type Supply = {
@@ -785,8 +786,6 @@ export default function Dashboard({
     currentOrderIssues.some(issue => issue.order_id === order.id || issue.order_number === order.orderNumber) ||
     blockedMatOrders.has(order.id) || (inventoryLoaded && missingFulfillmentSupplies.length > 0)
   )).map(order => order.id));
-  const overview = fulfillmentOverview({ recentIssueEvents, orders, inProduction: ordersInProduction, issueCount: currentOrderIssues.length,
-    blockedCount: heldOrderIds.size, supplies, lowSupplies: lowSupplyNames, balance: balanceOwed });
 
   return (
     <main className="dashboard">
@@ -966,101 +965,30 @@ export default function Dashboard({
               </button>
             )}
           </div>
-          <p className="fulfillment-narrative">{matStockChecked ? overview : "Refreshing the fulfillment overview. Current order and supply totals will appear when the data is available."}</p>
-          {nextProductionPlan !== undefined && (
-            <a className="summary-copy next-run-overview" href="#production-plan">
-              <CalendarDays size={20} aria-hidden="true" />
-              <span>
-                {nextProductionPlan ? <>
-                  <strong>Next production run is scheduled for {prettyDate(nextProductionPlan.scheduled_date)} at {prettyTime(nextProductionPlan.scheduled_time)} Detroit time.</strong>
-                  {" "}40 mats planned across four designs. View the batch breakdown.
-                </> : <>
-                  <strong>Next production run has not been scheduled.</strong>{" "}
-                  View the 40 mat batch planner.
-                </>}
-              </span>
+          <div className="overview-alerts" aria-label="Fulfillment alerts">
+            <ProductionRunStatus plan={nextProductionPlan}/>
+            {heldOrderIds.size > 0 && <a className="summary-copy order-issue-alert" href="#order-queue">
+              <Flag size={19}/><span><strong>{heldOrderIds.size} orders unable to ship</strong>
+              <small>{currentOrderIssues.length} flagged issues · Review holds</small></span>
+            </a>}
+            {blockedMatOrders.size > 0 && <a className="summary-copy mat-shortage-alert" href="#inventory">
+              <AlertTriangle size={19}/><span><strong>{matAvailability.missingMats} additional mats needed</strong>
+              <small>{blockedMatOrders.size} orders blocked · 40 mat run minimum</small></span>
+            </a>}
+            {balanceOwed > 0 && <a className="summary-copy balance-alert" href="#operations">
+              <AlertTriangle size={19}/><span><strong>Payment due: {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(balanceOwed)}</strong>
+              <small>View charges and payments</small></span>
+            </a>}
+            <a className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`} href="#supplies">
+              {lowSupplyNames.length ? <AlertTriangle size={19}/> : <PackageCheck size={19}/>}
+              <span><strong>{!matStockChecked ? "Checking supplies…" : lowSupplyNames.length ? "Replenish " + lowSupplyNames.join(", ") : "Inventory is ready"}</strong>
+              <small>{matStockChecked ? availableCapacity + " additional orders supported" : "Refreshing available stock"}</small></span>
             </a>
-          )}
-          {blockedMatOrders.size > 0 && (
-            <div className="summary-copy mat-shortage-alert" role="status">
-              <AlertTriangle size={23} />
-              <div>
-                <strong className="mat-shortage-title">
-                  Purchasing required — unable to fulfill {blockedMatOrders.size}{" "}
-                  pending {blockedMatOrders.size === 1 ? "order" : "orders"}
-                </strong>
-                <p>
-                  Current blank mats and matching pre-printed stock cannot cover these orders.
-                  {" "}{matAvailability.missingMats} additional {matAvailability.missingMats === 1 ? "mat is" : "mats are"} needed
-                  to cover the queue: {matAvailability.shortages.map((item) => `${item.name} (${item.quantity})`).join(", ")}.
-                </p>
-                <p>
-                  Per our agreement, production runs require a <strong>minimum of 40 mats</strong>.
-                  {" "}Please arrange the blank mats and required supplies, and submit payment before the next production run.
-                </p>
-                <small>Stock is allocated to pending orders oldest first. Incoming deliveries are excluded until received.</small>
-                <div className="mat-shortage-links">
-                  <a href="#order-queue" onClick={() => { setFilter("pending"); setQuery(""); }}>View pending orders</a>
-                  <a href="#operations">Supplies &amp; payment</a>
-                  <a href="/marsh-service-agreement.pdf" target="_blank" rel="noreferrer">Service agreement</a>
-                </div>
-              </div>
-            </div>
-          )}
-          {heldOrderIds.size > 0 && (
-            <a className="summary-copy order-issue-alert" href="#order-queue">
-              <Flag size={19} />
-              <span>
-                <strong>
-                  {heldOrderIds.size}{" "}
-                  {heldOrderIds.size === 1 ? "order is" : "orders are"} unable
-                  to ship.
-                </strong>{" "}
-                Review flagged issues and unavailable supplies in the fulfillment queue.
-              </span>
+            <a className="summary-copy shipping-update" href="#order-queue">
+              <Truck size={19}/><span><strong>{orders.filter(order => order.status !== "pending" && Date.parse(order.shipDate ?? "") >= Date.now() - 86400000).length} orders shipped in 24 hours</strong>
+              <small>{orders.filter(order => order.status === "shipped").length} in transit · {orders.filter(order => order.status === "delivered").length} delivered</small></span>
             </a>
-          )}
-          {balanceOwed > 0 && (
-            <a className="summary-copy balance-alert" href="#operations">
-              <AlertTriangle size={19} />
-              <span>
-                <strong>
-                  Payment due: $
-                  {balanceOwed.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </strong>{" "}
-                remains outstanding on the payment ledger. View charges and
-                recorded payments.
-              </span>
-            </a>
-          )}
-          <p
-            className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`}
-          >
-            {lowSupplyNames.length ? (
-              <>
-                <AlertTriangle size={19} />
-                <span>
-                  <strong>Purchasing recommended:</strong> Replenish{" "}
-                  {lowSupplyNames.join(", ")} to keep fulfillment moving.
-                  Current supplies support approximately{" "}
-                  <strong>{availableCapacity} additional orders</strong> after
-                  commitments.
-                </span>
-              </>
-            ) : (
-              <>
-                <PackageCheck size={19} />
-                <span>
-                  <strong>Inventory is ready.</strong> Current supplies support
-                  approximately {availableCapacity} additional orders after
-                  commitments.
-                </span>
-              </>
-            )}
-          </p>
+          </div>
           <div className="summary-stats">
             <div>
               <span>Pending orders</span>

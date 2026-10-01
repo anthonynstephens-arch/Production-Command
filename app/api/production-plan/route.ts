@@ -2,16 +2,22 @@ import { getPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const ACCOUNT_SLUG = "marsh-supply";
+export const dynamic = "force-dynamic";
+const fields = "run_id,stage,scheduled_date,scheduled_time,whatupdoe,did_you_call_first,upside_down_welcome,marsh_supply,updated_at,printing_started_at,drying_started_at,drying_ends_at,packaging_started_at,completed_at";
+const withClock = (plan: Record<string, unknown> | null) => plan ? { ...plan, server_now: new Date().toISOString() } : null;
 const keys = ["whatupdoe", "did_you_call_first", "upside_down_welcome", "marsh_supply"] as const;
 
 export async function GET() {
   const session = await getPortalSession();
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const { data, error } = await getSupabaseAdmin().from("marsh_production_plan")
-    .select("scheduled_date,scheduled_time,whatupdoe,did_you_call_first,upside_down_welcome,marsh_supply,updated_at")
+  const db = getSupabaseAdmin();
+  const advanced = await db.rpc("marsh_advance_production_drying");
+  if (advanced.error) return Response.json({ error: "Could not refresh production progress." }, { status: 500 });
+  const { data, error } = await db.from("marsh_production_plan")
+    .select(fields)
     .eq("account_slug", ACCOUNT_SLUG).maybeSingle();
   if (error) return Response.json({ error: "Could not load the production plan." }, { status: 500 });
-  return Response.json({ plan: data });
+  return Response.json({ plan: withClock(data) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(request: Request) {
@@ -38,11 +44,38 @@ export async function PUT(request: Request) {
   if (keys.some((key) => !Number.isSafeInteger(counts[key]) || counts[key] < 0) ||
       keys.reduce((total, key) => total + counts[key], 0) !== 40)
     return Response.json({ error: "The four design quantities must add up to exactly 40 mats." }, { status: 400 });
-  const { data, error } = await getSupabaseAdmin().from("marsh_production_plan")
-    .upsert({ account_slug: ACCOUNT_SLUG, scheduled_date: date, scheduled_time: time,
-      ...counts, updated_at: new Date().toISOString(), updated_by: session.userId },
-    { onConflict: "account_slug" })
-    .select("scheduled_date,scheduled_time,whatupdoe,did_you_call_first,upside_down_welcome,marsh_supply,updated_at").single();
-  if (error) return Response.json({ error: "Could not save the production plan." }, { status: 500 });
-  return Response.json({ plan: data });
+  const db = getSupabaseAdmin();
+  const current = await db.from("marsh_production_plan").select(fields).eq("account_slug", ACCOUNT_SLUG).maybeSingle();
+  if (current.error) return Response.json({ error: "Could not check the current run." }, { status: 500 });
+  if (current.data && !["scheduled","completed"].includes(current.data.stage))
+    return Response.json({ error: "Complete the current run before scheduling another." }, { status: 409 });
+  if ((current.data?.updated_at ?? null) !== (body.expected_updated_at ?? null))
+    return Response.json({ error: "The schedule changed. Refresh and try again." }, { status: 409 });
+  const startingNew = !current.data || current.data.stage === "completed";
+  const values = { account_slug: ACCOUNT_SLUG, scheduled_date: date, scheduled_time: time,
+    ...counts, updated_at: new Date().toISOString(), updated_by: session.userId,
+    ...(startingNew ? { run_id: crypto.randomUUID(), stage: "scheduled", printing_started_at: null,
+      drying_started_at: null, drying_ends_at: null, packaging_started_at: null, completed_at: null } : {}) };
+  const result = current.data
+    ? await db.from("marsh_production_plan").update(values).eq("account_slug", ACCOUNT_SLUG)
+        .eq("updated_at", current.data.updated_at).eq("run_id", current.data.run_id).select(fields).maybeSingle()
+    : await db.from("marsh_production_plan").insert(values).select(fields).single();
+  if (result.error) return Response.json({ error: "Could not save the production plan." }, { status: 500 });
+  if (!result.data) return Response.json({ error: "The run changed. Refresh and try again." }, { status: 409 });
+  return Response.json({ plan: withClock(result.data) });
+}
+
+export async function PATCH(request: Request) {
+  const session = await getPortalSession();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
+  const body = await request.json().catch(() => ({}));
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.run_id)) ||
+      !["printing","drying","packaging","completed"].includes(body.stage))
+    return Response.json({ error: "Choose a valid production stage." }, { status: 400 });
+  const { data, error } = await getSupabaseAdmin().rpc("marsh_set_production_stage", {
+    expected_run: body.run_id, requested_stage: body.stage, actor: session.userId
+  });
+  if (error) return Response.json({ error: error.code === "P0001" ? error.message : "Could not update the production stage." }, { status: error.code === "P0001" ? 409 : 500 });
+  return Response.json({ plan: withClock(data) });
 }
