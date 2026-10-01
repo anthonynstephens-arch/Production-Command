@@ -5,7 +5,7 @@ import { countdownText, dryingSeconds, stageAt, stageLabels, type ProductionStag
 import { useRunClock } from "./production-run-status";
 import type { Plan } from "@/lib/production-run";
 export type { Plan } from "@/lib/production-run";
-import { CalendarDays, Clock3, AlertTriangle, Factory, Save } from "lucide-react";
+import { CalendarDays, AlertTriangle, Save } from "lucide-react";
 
 type MixKey = "whatupdoe" | "did_you_call_first" | "upside_down_welcome" | "marsh_supply";
 const designs: { key: MixKey; label: string; tone: string }[] = [
@@ -146,40 +146,18 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   };
 
   return (
-    <section className="production-plan panel" id="production-plan" aria-labelledby="production-plan-title">
+    <section className="production-plan panel compact-production-plan" id="production-plan" aria-labelledby="production-plan-title">
       <div className="production-plan-intro">
-        <span className="production-plan-icon"><Factory size={25} /></span>
-        <div>
-          <p className="eyebrow">40 MAT PRODUCTION RUN</p>
-          <h2 id="production-plan-title">Production schedule</h2>
-          <p>Four designs · one 40 mat run · Detroit time</p>
+        <div className="compact-run-heading">
+          <h2 id="production-plan-title">Production run</h2>
+          <span>{loading ? "Loading…" : plan ? `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(plan.scheduled_date + "T12:00:00Z"))} · ${prettyTime(plan.scheduled_time)} Detroit · 40 mats` : "No run scheduled"}</span>
         </div>
-        {isAdmin && canSchedule && !loading && <button type="button" disabled={saving} className="plan-edit-button" onClick={toggleEditor}>
+        {isAdmin && (canSchedule || editing) && !loading && <button type="button" disabled={saving} className="plan-edit-button" onClick={toggleEditor}>
           {editing ? "Close editor" : currentStage === "completed" ? "Schedule next run" : plan ? "Edit schedule" : "Schedule run"}
         </button>}
       </div>
 
-      <div className="production-plan-content">
-        <div className="run-date-card">
-          <span className="run-date-label">{loading ? "LOADING SCHEDULE" : isPast ? "SCHEDULE OVERDUE" : plan ? stageLabels[currentStage] : "NOT YET SCHEDULED"}</span>
-          <strong>{plan ? prettyDate(plan.scheduled_date) : "No run scheduled"}</strong>
-          <p><Clock3 size={17} /> {plan ? `${prettyTime(plan.scheduled_time)} Detroit time` : "Monday · Wednesday · Friday"}</p>
-          {!plan && !loading && <small>Next eligible day: {prettyDate(nextRunDate())}. An admin must confirm the date and 40 mat mix.</small>}
-          {plan && <small>Updated {new Date(plan.updated_at).toLocaleDateString("en-US", { timeZone: "America/Detroit" })}</small>}
-        </div>
-        <div className="run-mix-card">
-          <div className="run-mix-heading"><span>Batch breakdown</span><strong>{plan ? "40 / 40" : "Awaiting schedule"}</strong></div>
-          {plan ? <>
-            <div className="run-mix-bar" role="img" aria-label={designs.map(({ key, label }) => `${label}: ${plan[key]} mats`).join(", ")}>
-              {designs.map(({ key, tone }) => <span key={key} className={tone} style={{ width: `${plan[key] / 40 * 100}%` }} />)}
-            </div>
-            <div className="run-mix-list">{designs.map(({ key, label, tone }) => <div key={key}><i className={tone} /><span>{label}</span><strong>{plan[key]}</strong></div>)}</div>
-          </> : <p className="run-empty">Once the admin saves a date and mix, the full 40 mat plan will appear here for everyone.</p>}
-        </div>
-      </div>
-
       {plan && <div className="run-progress">
-        <div className="run-progress-heading"><span>Current stage</span><strong>{stageLabels[currentStage]}</strong></div>
         <ol className="run-stage-list" aria-label="Production stages">
           {(["printing", "drying", "packaging"] as const).map((stage, index) => {
             const rank = ["scheduled", "printing", "drying", "packaging", "completed"].indexOf(currentStage);
@@ -191,29 +169,27 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
               <button type="button" disabled={!available} aria-current={currentStage === stage ? "step" : undefined}
                 onClick={() => void updateStage(stage)}>
                 <span className="run-stage-number">{reached && currentStage !== stage ? "✓" : index + 1}</span>
-                <strong>{stageLabels[stage]}</strong>
-                {available && <small>Mark current stage</small>}
-                {currentStage === stage && <small>In progress</small>}
+                <span className="run-stage-copy">
+                  <strong>{stageLabels[stage]}</strong>
+                  {stage === "drying" && currentStage === "drying" &&
+                    <span className="drying-pill-timer" role="timer" aria-live="off" aria-label="Drying time remaining">{countdownText(dryingSeconds(plan, now))}</span>}
+                </span>
               </button>
             </li>;
           })}
         </ol>
-        {currentStage === "drying" && <div className="drying-countdown">
-          <Clock3 size={22}/><div><span>Drying time remaining</span>
-          <strong role="timer" aria-live="off">{countdownText(dryingSeconds(plan, now))}</strong>
-          <small>Automatically moves to PACKAGING FOR SHIPMENT after 24 hours.</small></div>
-          <progress max={86400} value={86400 - Math.min(86400, dryingSeconds(plan, now))} aria-label="Drying progress"/>
-        </div>}
         {isAdmin ? <label className="run-completed-check">
           <input type="checkbox" checked={currentStage === "completed"}
             disabled={saving || editing || currentStage !== "packaging"}
             onChange={event => { if (event.target.checked) void updateStage("completed"); }}/>
-          <span><strong>Completed</strong><small>{currentStage === "completed" && plan.completed_at
-            ? "Packing finished · " + new Date(plan.completed_at).toLocaleString("en-US", { timeZone: "America/Detroit" })
-            : "Check when packaging for shipment is finished."}</small></span>
+          <span><strong>Completed</strong></span>
         </label> : currentStage === "completed" ? <p className="run-complete-note">Packing finished · Run completed</p> : null}
-        {saving && <p role="status" className="plan-feedback">Saving production update…</p>}
       </div>}
+
+      {plan && <details className="compact-run-breakdown">
+        <summary>Batch breakdown</summary>
+        <div className="run-mix-list">{designs.map(({ key, label, tone }) => <div key={key}><i className={tone}/><span>{label}</span><strong>{plan[key]}</strong></div>)}</div>
+      </details>}
 
       {plan && currentStage === "scheduled" && blankMats < 40 && <p className="plan-warning"><AlertTriangle size={17} /> {40 - blankMats} more blank mats are needed for this run. The plan does not reserve inventory.</p>}
       {plan && currentStage === "scheduled" && shortages.length > 0 && <p className="plan-warning"><AlertTriangle size={17} /> Pending demand exceeds this batch mix for {shortages.map((item) => item.label).join(", ")}. Review the quantities before production.</p>}

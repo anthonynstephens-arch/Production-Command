@@ -42,8 +42,7 @@ import NotificationSettings, {
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
-import ProductionPlan, { type Plan } from "./production-plan";
-import ProductionRunStatus from "./production-run-status";
+import ProductionPlan from "./production-plan";
 import OperationalCharts from "./operational-charts";
 
 type Supply = {
@@ -314,7 +313,6 @@ export default function Dashboard({
     {},
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [nextProductionPlan, setNextProductionPlan] = useState<Plan | null | undefined>(undefined);
   const [ordersInProduction, setOrdersInProduction] = useState(0);
   const [productionDraft, setProductionDraft] = useState("0");
   const [productionSaving, setProductionSaving] = useState(false);
@@ -951,6 +949,14 @@ export default function Dashboard({
             <ShieldCheck size={18} /> Service Agreement
           </a>
         </nav>
+        <ProductionPlan
+          isAdmin={session.role === "admin" && view === "admin"}
+          blankMats={supplies.mats}
+          pendingByDesign={pendingByDesign}
+          finishedMats={finishedMats}
+        />
+
+
         <section className="overview-summary" id="overview">
           <div className="overview-topline">
             <p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>
@@ -966,7 +972,6 @@ export default function Dashboard({
             )}
           </div>
           <div className="overview-alerts" aria-label="Fulfillment alerts">
-            <ProductionRunStatus plan={nextProductionPlan}/>
             {heldOrderIds.size > 0 && <a className="summary-copy order-issue-alert" href="#order-queue">
               <Flag size={19}/><span><strong>{heldOrderIds.size} orders unable to ship</strong>
               <small>{currentOrderIssues.length} flagged issues · Review holds</small></span>
@@ -1193,13 +1198,6 @@ export default function Dashboard({
           </article>
         </section>
 
-        <ProductionPlan
-          isAdmin={session.role === "admin" && view === "admin"}
-          blankMats={supplies.mats}
-          pendingByDesign={pendingByDesign}
-          finishedMats={finishedMats}
-          onPlanChange={setNextProductionPlan}
-        />
 
         <OperationalCharts
           orders={orders}
