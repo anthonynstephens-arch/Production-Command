@@ -8,6 +8,7 @@ export type { Plan } from "@/lib/production-run";
 import { CalendarDays, AlertTriangle, Save } from "lucide-react";
 
 type MixKey = "whatupdoe" | "did_you_call_first" | "upside_down_welcome" | "marsh_supply";
+type NextRun = Record<MixKey, number> & { is_tbd: boolean; scheduled_date: string | null; scheduled_time: string | null; updated_at: string };
 const designs: { key: MixKey; label: string; tone: string }[] = [
   { key: "whatupdoe", label: "Whatupdoe", tone: "blue" },
   { key: "did_you_call_first", label: "Did You Call First?", tone: "mint" },
@@ -46,8 +47,11 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   onPlanChange?: (plan: Plan | null) => void;
 }) {
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [nextRun, setNextRun] = useState<NextRun | null>(null);
+  const [isTbd, setIsTbd] = useState(true);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [editingCurrent, setEditingCurrent] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("09:00");
   const [mix, setMix] = useState<Record<MixKey, number>>({ whatupdoe: 10, did_you_call_first: 10, upside_down_welcome: 10, marsh_supply: 10 });
@@ -58,7 +62,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   const mutation = useRef({ busy: false, version: 0 });
   const now = useRunClock(plan);
   const currentStage = plan ? stageAt(plan, now) : "scheduled";
-  const canSchedule = !plan || currentStage === "scheduled" || currentStage === "completed";
+  const canStartNext = !plan || currentStage === "completed";
 
   useEffect(() => {
     if (!editing) setDate(nextRunDate());
@@ -67,16 +71,21 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
       if (mutation.current.busy) return;
       const version = mutation.current.version;
       try {
-        const response = await fetch("/api/production-plan", { cache: "no-store" });
-        if (!response.ok) throw new Error("The production plan could not be loaded.");
-        const data = await response.json();
+        const [response, nextResponse] = await Promise.all([
+          fetch("/api/production-plan", { cache: "no-store" }),
+          fetch("/api/next-production-run", { cache: "no-store" })
+        ]);
+        if (!response.ok || !nextResponse.ok) throw new Error("The production schedule could not be loaded.");
+        const [data, nextData] = await Promise.all([response.json(), nextResponse.json()]);
         if (!active || mutation.current.busy || version !== mutation.current.version) return;
         setPlan(data.plan ?? null);
         onPlanChange?.(data.plan ?? null);
-        if (data.plan && !editing) {
-          setDate(data.plan.scheduled_date);
-          setTime(data.plan.scheduled_time.slice(0, 5));
-          setMix(Object.fromEntries(designs.map(({ key }) => [key, data.plan[key]])) as Record<MixKey, number>);
+        setNextRun(nextData.next ?? null);
+        if (!editing) {
+          setIsTbd(nextData.next?.is_tbd ?? true);
+          setDate(nextData.next?.scheduled_date ?? nextRunDate());
+          setTime(nextData.next?.scheduled_time?.slice(0, 5) ?? "09:00");
+          if (nextData.next) setMix(Object.fromEntries(designs.map(({ key }) => [key, nextData.next[key]])) as Record<MixKey, number>);
         }
         setLoadError("");
       } catch (error) {
@@ -104,14 +113,14 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
     mutation.current = { busy: true, version: mutation.current.version + 1 };
     setMessage("");
     try {
-      const response = await fetch("/api/production-plan", { method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduled_date: date, scheduled_time: time, ...mix, expected_updated_at: editVersion }) });
+      const response = await fetch(editingCurrent ? "/api/production-plan" : "/api/next-production-run", { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_tbd: isTbd, scheduled_date: !editingCurrent && isTbd ? null : date, scheduled_time: !editingCurrent && isTbd ? null : time, ...mix, expected_updated_at: editVersion }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save the plan.");
-      setPlan(data.plan);
-      onPlanChange?.(data.plan);
+      if (editingCurrent) { setPlan(data.plan); onPlanChange?.(data.plan); }
+      else setNextRun(data.next);
       setEditing(false);
-      setMessage("Production plan saved.");
+      setMessage(editingCurrent ? "Current schedule saved." : "Next production run saved.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save the plan.");
     } finally { mutation.current.busy = false; setSaving(false); }
@@ -134,27 +143,44 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
       setMessage(error instanceof Error ? error.message : "Could not update the stage.");
     } finally { mutation.current.busy = false; setSaving(false); }
   };
-  const toggleEditor = () => {
+  const toggleEditor = (target: "next" | "current") => {
     if (saving) return;
-    setEditVersion(plan?.updated_at ?? null);
-    if (!editing && (!plan || currentStage === "completed")) {
-      setDate(nextRunDate());
-      setTime("09:00");
-    }
-    setEditing(value => !value);
+    if (editing) { setEditing(false); return; }
+    const current = target === "current";
+    setEditingCurrent(current);
+    setEditVersion(current ? plan?.updated_at ?? null : nextRun?.updated_at ?? null);
+    setIsTbd(current ? false : nextRun?.is_tbd ?? true);
+    setDate((current ? plan?.scheduled_date : nextRun?.scheduled_date) ?? nextRunDate());
+    setTime((current ? plan?.scheduled_time : nextRun?.scheduled_time)?.slice(0,5) ?? "09:00");
+    const source = current ? plan : nextRun;
+    if (source) setMix(Object.fromEntries(designs.map(({key}) => [key,source[key]])) as Record<MixKey,number>);
+    setEditing(true); setMessage("");
+  };
+
+  const startNext = async () => {
+    if (!nextRun || saving || !canStartNext) return;
+    setSaving(true);
+    mutation.current = { busy: true, version: mutation.current.version + 1 };
     setMessage("");
+    try {
+      const response = await fetch("/api/next-production-run", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_version: nextRun.updated_at, expected_active: plan?.run_id ?? null }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not start the next run.");
+      setPlan(data.plan); onPlanChange?.(data.plan); setNextRun(null); setIsTbd(true);
+      setMessage("PRINTING saved.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start the run."); }
+    finally { mutation.current.busy = false; setSaving(false); }
   };
 
   return (
     <section className="production-plan panel compact-production-plan" id="production-plan" aria-labelledby="production-plan-title">
       <div className="production-plan-intro">
         <div className="compact-run-heading">
-          <h2 id="production-plan-title">Production run</h2>
+          <h2 id="production-plan-title">Current production run</h2>
           <span>{loading ? "Loading…" : plan ? `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(plan.scheduled_date + "T12:00:00Z"))} · ${prettyTime(plan.scheduled_time)} Detroit · 40 mats` : "No run scheduled"}</span>
         </div>
-        {isAdmin && (canSchedule || editing) && !loading && <button type="button" disabled={saving} className="plan-edit-button" onClick={toggleEditor}>
-          {editing ? "Close editor" : currentStage === "completed" ? "Schedule next run" : plan ? "Edit schedule" : "Schedule run"}
-        </button>}
+        {isAdmin && plan && currentStage === "scheduled" && <button type="button" className="plan-edit-button" disabled={saving} onClick={() => toggleEditor("current")}>Edit current schedule</button>}
       </div>
 
       {plan && <div className="run-progress">
@@ -191,15 +217,33 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
         <div className="run-mix-list">{designs.map(({ key, label, tone }) => <div key={key}><i className={tone}/><span>{label}</span><strong>{plan[key]}</strong></div>)}</div>
       </details>}
 
+      <div className="next-production-slot" id="next-production-run">
+        <div className="next-production-heading">
+          <div><h3>Next production run</h3>
+            <strong>{loading ? "Loading…" : nextRun && !nextRun.is_tbd && nextRun.scheduled_date && nextRun.scheduled_time
+              ? prettyDate(nextRun.scheduled_date) + " · " + prettyTime(nextRun.scheduled_time) + " Detroit"
+              : "TBD"}</strong>
+          </div>
+          {isAdmin && !loading && <div className="next-production-actions">
+            <button type="button" disabled={saving} className="plan-edit-button" onClick={() => toggleEditor("next")}>{editing && !editingCurrent ? "Close editor" : nextRun ? "Edit next run" : "Plan next run"}</button>
+            {nextRun && canStartNext && !editing && <button type="button" disabled={saving} className="plan-edit-button" onClick={() => void startNext()}>Start PRINTING</button>}
+          </div>}
+        </div>
+        {nextRun && <details className="compact-run-breakdown"><summary>Next batch · 40 mats</summary>
+          <div className="run-mix-list">{designs.map(({ key, label, tone }) => <div key={key}><i className={tone}/><span>{label}</span><strong>{nextRun[key]}</strong></div>)}</div>
+        </details>}
+      </div>
+
       {plan && currentStage === "scheduled" && blankMats < 40 && <p className="plan-warning"><AlertTriangle size={17} /> {40 - blankMats} more blank mats are needed for this run. The plan does not reserve inventory.</p>}
       {plan && currentStage === "scheduled" && shortages.length > 0 && <p className="plan-warning"><AlertTriangle size={17} /> Pending demand exceeds this batch mix for {shortages.map((item) => item.label).join(", ")}. Review the quantities before production.</p>}
       {isPast && <p className="plan-warning"><CalendarDays size={17} /> This scheduled date has passed. Update the schedule or mark PRINTING when this run begins.</p>}
 
-      {isAdmin && canSchedule && editing && <form className="production-plan-form" onSubmit={save}>
-        <div className="plan-date-fields"><label>Run date <input type="date" required min={detroitToday()} value={date} onChange={(event) => setDate(event.target.value)} /></label>
-          <label>Start time · Detroit <input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label></div>
+      {isAdmin && editing && <form className="production-plan-form" onSubmit={save}>
+        {!editingCurrent && <label className="next-run-timing">Next run timing<select value={isTbd ? "tbd" : "scheduled"} onChange={event => setIsTbd(event.target.value === "tbd")}><option value="tbd">TBD</option><option value="scheduled">Choose date and time</option></select></label>}
+        <div className="plan-date-fields"><label>Run date <input type="date" disabled={!editingCurrent && isTbd} required={editingCurrent || !isTbd} min={detroitToday()} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+          <label>Start time · Detroit <input type="time" disabled={isTbd} required={!isTbd} value={time} onChange={(event) => setTime(event.target.value)} /></label></div>
         <div className="plan-quantity-fields">{designs.map(({ key, label }) => <label key={key}>{label}<input type="number" min="0" max="40" step="1" required value={mix[key]} onChange={(event) => setMix({ ...mix, [key]: Number(event.target.value) })} /></label>)}</div>
-        <div className="plan-form-footer"><span className={total === 40 ? "complete" : "incomplete"}>{total} / 40 mats planned</span><button type="submit" disabled={saving || total !== 40}><Save size={16} /> {saving ? "Saving…" : "Save production run"}</button></div>
+        <div className="plan-form-footer"><span className={total === 40 ? "complete" : "incomplete"}>{total} / 40 mats planned</span><button type="submit" disabled={saving || total !== 40}><Save size={16} /> {saving ? "Saving…" : editingCurrent ? "Save current schedule" : "Save next production run"}</button></div>
       </form>}
       {loadError && <p className="plan-warning" role="alert">{loadError}</p>}
       {message && <p className="plan-feedback" role="status">{message}</p>}

@@ -865,7 +865,7 @@ export default function Dashboard({
               <a href="#inventory" onClick={() => setMobileMenuOpen(false)}>
                 Inventory
               </a>
-              <a href="#production-plan" onClick={() => setMobileMenuOpen(false)}>
+              <a href="#next-production-run" onClick={() => setMobileMenuOpen(false)}>
                 Next production run <span className="nav-new-badge">NEW</span>
               </a>
               <a href="#pipeline" onClick={() => setMobileMenuOpen(false)}>
@@ -934,7 +934,7 @@ export default function Dashboard({
             </a>
           )}
           <a href="#inventory"><Boxes size={18} /> Inventory</a>
-          <a href="#production-plan"><CalendarDays size={18} /> Next production run <span className="nav-new-badge">NEW</span></a>
+          <a href="#next-production-run"><CalendarDays size={18} /> Next production run <span className="nav-new-badge">NEW</span></a>
           <a href="#pipeline"><Factory size={18} /> Orders &amp; capacity</a>
           <a href="#mat-sales"><TrendingUp size={18} /> Mat sales</a>
           <a href="#operations"><Truck size={18} /> Payments &amp; deliveries</a>
@@ -949,12 +949,6 @@ export default function Dashboard({
             <ShieldCheck size={18} /> Service Agreement
           </a>
         </nav>
-        <ProductionPlan
-          isAdmin={session.role === "admin" && view === "admin"}
-          blankMats={supplies.mats}
-          pendingByDesign={pendingByDesign}
-          finishedMats={finishedMats}
-        />
 
 
         <section className="overview-summary" id="overview">
@@ -1017,6 +1011,14 @@ export default function Dashboard({
             </div>
           </div>
         </section>
+
+        <ProductionPlan
+          isAdmin={session.role === "admin" && view === "admin"}
+          blankMats={supplies.mats}
+          pendingByDesign={pendingByDesign}
+          finishedMats={finishedMats}
+        />
+
 
         <div className="sync-feedback" role="status" aria-live="polite">
           {syncing ? (

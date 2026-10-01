@@ -297,3 +297,12 @@
 .dashboard .compact-run-breakdown .run-mix-list>div{font-size:14px}
 @media(max-width:800px){.compact-production-plan .run-stage-list{flex-basis:100%}.compact-production-plan .run-stage-list button{padding:8px 10px;gap:6px}.dashboard .compact-production-plan .plan-edit-button{margin-left:auto}}
 @media(max-width:500px){.dashboard .compact-production-plan{padding:14px}.compact-production-plan .run-stage-list{grid-template-columns:1fr}.compact-production-plan .run-stage-list button{min-height:44px;padding:8px 14px}.run-stage-copy{flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap}.drying-pill-timer{font-size:18px}.overview-alerts{grid-template-columns:1fr}}
+
+.next-production-slot{margin-top:12px;padding-top:12px;border-top:1px solid #e3e9f1}
+.next-production-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.next-production-heading h3{font-size:15px;margin:0 0 3px;color:#596d86;font-weight:600}
+.next-production-heading strong{font-size:16px;color:#26436c}
+.next-production-actions{display:flex;gap:8px;flex-wrap:wrap}
+.dashboard .next-production-actions .plan-edit-button{margin:0}
+.next-run-timing select{min-height:44px;max-width:360px;padding:8px 12px;background:#fff;color:#27364b;border:1px solid #bfcde0;border-radius:7px;font:inherit}
+.dashboard .production-plan-form input:disabled{background:#eaf0f7;color:#8793a5}
