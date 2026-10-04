@@ -12,7 +12,7 @@ export async function syncMarshShipmentInventory(orders: PortalOrder[]) {
         order.quantity > 0,
     )
     .map((order) => ({
-      id: order.id,
+      id: order.shipmentId ? `shipment:${order.shipmentId}` : `order:${order.id}:${order.trackingNumber || order.shipDate || "shipped"}`,
       units: order.quantity,
       designs: (
         order.items?.length
