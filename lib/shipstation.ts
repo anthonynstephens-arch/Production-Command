@@ -10,6 +10,7 @@ export type PortalOrder = {
   orderDate: string;
   shipDate?: string;
   trackingNumber?: string;
+  shipmentId?: string;
   carrier?: string;
   service?: string;
   customerEmail?: string;
@@ -142,7 +143,7 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
           item: items.map(item => item.name).join(", ") || "Marsh Supply order",
           quantity: items.reduce((sum, item) => sum + item.quantity, 0),
           status: normalizeStatus(order.orderStatus, shipDate, trackingNumber, Boolean(shipment)), orderDate: order.orderDate ?? new Date().toISOString(), shipDate,
-          trackingNumber, carrier: carrier?.toUpperCase(), service: shipment?.serviceCode || order.serviceCode, customerEmail: order.customerEmail, customerPhone: order.shipTo?.phone,
+          trackingNumber, shipmentId: shipment?.shipmentId !== undefined ? String(shipment.shipmentId) : undefined, carrier: carrier?.toUpperCase(), service: shipment?.serviceCode || order.serviceCode, customerEmail: order.customerEmail, customerPhone: order.shipTo?.phone,
           shippingAddress: order.shipTo ? { name: order.shipTo.name, company: order.shipTo.company, street1: order.shipTo.street1, street2: order.shipTo.street2, street3: order.shipTo.street3, city: order.shipTo.city, state: order.shipTo.state, postalCode: order.shipTo.postalCode, country: order.shipTo.country } : undefined, items,
         };
       });
