@@ -1,4 +1,5 @@
 import { getShipStationOrders } from "@/lib/shipstation";
+import { syncMarshShipmentInventory } from "@/lib/marsh-shipment-inventory";
 import Dashboard from "./ui/dashboard";
 import { getPortalSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -12,5 +13,6 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
   if (!session) redirect(`/login?next=${encodeURIComponent(next)}`);
   if (session.mustChangePin) redirect("/change-pin");
   const result = await getShipStationOrders();
+  if (result.connected) await syncMarshShipmentInventory(result.orders);
   return <Dashboard initialOrders={result.orders} initialConnected={result.connected} initialMessage={result.message} session={session} />;
 }
