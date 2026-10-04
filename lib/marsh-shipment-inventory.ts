@@ -3,13 +3,16 @@ import type { PortalOrder } from "./shipstation";
 import { getSupabaseAdmin } from "./supabase-admin";
 
 const ACCOUNT_SLUG = "marsh-supply";
+const SHIPMENT_RECONCILIATION_CUTOFF = Date.parse("2026-09-18T03:51:19.685696Z");
 
 export async function syncMarshShipmentInventory(orders: PortalOrder[]) {
   const shipments = orders
     .filter(
-      (order) =>
-        (order.status === "shipped" || order.status === "delivered") &&
-        order.quantity > 0,
+      (order) => {
+        if ((order.status !== "shipped" && order.status !== "delivered") || order.quantity <= 0) return false;
+        const shippedAt = order.shipDate ? Date.parse(order.shipDate) : NaN;
+        return Number.isFinite(shippedAt) && shippedAt > SHIPMENT_RECONCILIATION_CUTOFF;
+      },
     )
     .map((order) => ({
       id: order.shipmentId ? `shipment:${order.shipmentId}` : `order:${order.id}:${order.trackingNumber || order.shipDate || "shipped"}`,
