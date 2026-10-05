@@ -80,7 +80,7 @@ begin
     update public.marsh_inventory
     set quantity = greatest(0, quantity - case item_key
       when 'blank_mats' then item_units
-      when 'shipping_boxes' then 1
+      when 'shipping_boxes' then ceil(item_units::numeric / 2.0)::integer
       when 'thank_you_cards' then 1
       when 'poly_bags' then item_units
       else 0
