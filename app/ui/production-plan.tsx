@@ -5,6 +5,7 @@ import { countdownText, dryingSeconds, stageAt, stageLabels, type ProductionStag
 import { useRunClock } from "./production-run-status";
 import type { Plan } from "@/lib/production-run";
 export type { Plan } from "@/lib/production-run";
+import RunBreakdowns from "./run-breakdowns";
 import { CalendarDays, AlertTriangle, Save } from "lucide-react";
 
 type MixKey = "whatupdoe" | "did_you_call_first" | "upside_down_welcome" | "marsh_supply";
@@ -245,6 +246,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
         <div className="plan-quantity-fields">{designs.map(({ key, label }) => <label key={key}>{label}<input type="number" min="0" max="40" step="1" required value={mix[key]} onChange={(event) => setMix({ ...mix, [key]: Number(event.target.value) })} /></label>)}</div>
         <div className="plan-form-footer"><span className={total === 40 ? "complete" : "incomplete"}>{total} / 40 mats planned</span><button type="submit" disabled={saving || total !== 40}><Save size={16} /> {saving ? "Saving…" : editingCurrent ? "Save current schedule" : "Save next production run"}</button></div>
       </form>}
+      <RunBreakdowns isAdmin={isAdmin}/>
       {loadError && <p className="plan-warning" role="alert">{loadError}</p>}
       {message && <p className="plan-feedback" role="status">{message}</p>}
     </section>

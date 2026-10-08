@@ -63,3 +63,24 @@ test('replenishment clears shortages and empty queues have no alert', () => {
   assert.equal(getMatAvailability([order('one', 'Whatupdoe', 2)], 40, []).blockedOrderIds.size, 0);
   assert.equal(getMatAvailability([], 0, []).blockedOrderIds.size, 0);
 });
+
+test('capacity keeps remaining printed stock when there are no blanks', () => {
+  const result = getMatAvailability([order('one','Whatupdoe',2)],0,[{design_key:'whatupdoe',quantity:12},{design_key:'marsh-supply',quantity:5}]);
+  assert.equal(result.availablePrinted,15);
+  assert.equal(result.availablePrintedByDesign.whatupdoe,10);
+  assert.equal(result.allocations.get('one').printed,2);
+  assert.equal(result.readyOrderIds.has('one'),true);
+});
+
+test('a new order reserves matching printed stock without changing physical stock', () => {
+  const stock=[{design_key:'whatupdoe',quantity:3}];
+  const first=getMatAvailability([order('old','Whatupdoe',2)],0,stock);
+  const next=getMatAvailability([order('new','Whatupdoe',2),order('old','Whatupdoe',2)],0,stock);
+  assert.equal(first.availablePrinted,1);
+  assert.equal(next.availablePrinted,0);
+  assert.equal(next.allocations.get('old').printed,2);
+  assert.equal(next.allocations.get('new').printed,1);
+  assert.equal(next.allocations.get('new').toPrint,1);
+  assert.equal(next.readyOrderIds.has('new'),false);
+  assert.equal(stock[0].quantity,3);
+});

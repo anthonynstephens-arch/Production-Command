@@ -351,9 +351,11 @@ export default function Dashboard({
     const refresh = () => loadInventory().catch(() => {});
     const timer = window.setInterval(refresh, 15000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("marsh-inventory-changed", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("marsh-inventory-changed", refresh);
     };
   }, []);
 
@@ -673,7 +675,10 @@ export default function Dashboard({
   const matStockChecked = connected && inventoryLoaded && finishedMatsLoaded;
   const blockedMatOrders = matStockChecked ? matAvailability.blockedOrderIds : new Set<string>();
   const availableMats = matAvailability.availableBlanks;
-  const availableBoxes = Math.max(0, supplies.boxes - committedUnits);
+  const pendingOrders = orders.filter(order=>order.status==="pending");
+  const committedBoxes = pendingOrders.reduce((sum,order)=>sum+Math.ceil(order.quantity/2),0);
+  const availableStockMats = matAvailability.availablePrinted + availableMats;
+  const availableBoxes = Math.max(0, supplies.boxes - committedBoxes);
   const tapeCoverage = Math.max(1, supplies.tapeCoverage);
   const committedTapeRolls = Math.ceil(
     (supplies.tapeUsage + committedUnits) / tapeCoverage,
@@ -685,11 +690,11 @@ export default function Dashboard({
   );
   const availableThankYouCards = Math.max(
     0,
-    supplies.thankYouCards - committedUnits,
+    supplies.thankYouCards - pendingOrders.length,
   );
   const availablePolyBags = Math.max(0, supplies.polyBags - committedUnits);
   const availableCapacity = Math.min(
-    availableMats,
+    availableStockMats,
     availableBoxes,
     availableTapeMatCapacity,
     availableThankYouCards,
@@ -701,7 +706,7 @@ export default function Dashboard({
     supplies.tape <= 0 || supplies.tape * tapeCoverage - supplies.tapeUsage <= 0 ? "packing tape" : null,
     supplies.thankYouCards <= 0 ? "thank-you cards" : null,
     supplies.polyBags <= 0 ? "poly bags" : null,
-    inkPercent <= 0 ? "ink" : null,
+
   ].filter((name): name is string => name !== null);
   const matSales = [
     { label: "Whatupdoe", value: matTotals.whatupdoe, tone: "green" },
@@ -731,14 +736,14 @@ export default function Dashboard({
     }, {});
   const finishedMatCards = finishedMats.map((item) => ({
     ...item,
-    committed: Math.min(item.quantity, pendingByDesign[item.design_key] || 0),
+    committed: item.quantity - (matAvailability.availablePrintedByDesign[item.design_key] ?? item.quantity),
     available: Math.max(
       0,
-      item.quantity - (pendingByDesign[item.design_key] || 0),
+      matAvailability.availablePrintedByDesign[item.design_key] ?? item.quantity,
     ),
   }));
   const capacityBlockers = [
-    { label: "blank coir mats", available: availableMats },
+    { label: "printed or blank mats", available: availableStockMats },
     { label: "shipping boxes", available: availableBoxes },
     { label: "mat uses of packing tape", available: availableTapeMatCapacity },
     { label: "thank-you cards", available: availableThankYouCards },
@@ -776,13 +781,13 @@ export default function Dashboard({
     : null;
   const ordersAwaitingProduction = Math.max(
     0,
-    counts.pending - ordersInProduction,
+    counts.pending - matAvailability.readyOrderIds.size - ordersInProduction,
   );
   const pipelineOrders = counts.pending;
-  const awaitingMats = awaitingMatTotal(orders, ordersInProduction);
+  const awaitingMats = awaitingMatTotal(orders.filter(order=>!matAvailability.readyOrderIds.has(order.id)).map(order=>order.status==="pending"?{...order,quantity:matAvailability.allocations.get(order.id)?.toPrint??order.quantity}:order), ordersInProduction);
   const heldOrderIds = new Set(orders.filter(order => order.status === "pending" && (
     currentOrderIssues.some(issue => issue.order_id === order.id || issue.order_number === order.orderNumber) ||
-    blockedMatOrders.has(order.id) || (inventoryLoaded && missingFulfillmentSupplies.length > 0)
+    blockedMatOrders.has(order.id) || (inventoryLoaded && (missingFulfillmentSupplies.length > 0 || (inkPercent<=0 && (matAvailability.allocations.get(order.id)?.toPrint??0)>0)))
   )).map(order => order.id));
 
   return (
@@ -1229,6 +1234,7 @@ export default function Dashboard({
             to <strong>{availableCapacity} additional single-mat orders</strong>
             .
           </p>
+          <p>{matAvailability.availablePrinted} unreserved printed mats + {availableMats} unreserved blanks. Printed stock must match the ordered design. {matAvailability.readyOrderIds.size} pending orders are covered by printed stock.</p>
           {capacityBlockers.length > 0 ? (
             <div className="capacity-blockers">
               <strong>Fulfillment is blocked by:</strong>
@@ -1282,7 +1288,7 @@ export default function Dashboard({
             unit="boxes"
             detail="One box reserved per pending unit"
             percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4}
-            committed={committedUnits}
+            committed={committedBoxes}
             available={availableBoxes}
             incoming={incoming.boxes}
             low={availableBoxes <= 0}
@@ -1328,7 +1334,7 @@ export default function Dashboard({
             percent={
               supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4
             }
-            committed={committedUnits}
+            committed={pendingOrders.length}
             available={availableThankYouCards}
             incoming={incoming.thankYouCards}
             low={availableThankYouCards <= 0}
@@ -1641,10 +1647,11 @@ export default function Dashboard({
                         </td>
                         <td data-label="Quantity">{order.quantity}</td>
                         <td data-label="Status">
+                          {order.status==="pending"&&matStockChecked&&<small className="stock-allocation">{matAvailability.allocations.get(order.id)?.printed||0} reserved from printed stock · {matAvailability.allocations.get(order.id)?.toPrint||0} to print</small>}
                           {heldOrderIds.has(order.id) ? <span className="status on-hold"><i />ON HOLD</span> : <StatusBadge status={order.status} />}
-                          {order.status === "pending" && (blockedMatOrders.has(order.id) || missingFulfillmentSupplies.length > 0) && (
-                            <span className="issue-pill mat-shortage-pill" title={[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies].filter(Boolean).join(", ")}>
-                              <AlertTriangle size={13} aria-hidden="true" /> Unable to ship · {[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies].filter(Boolean).join(", ")}
+                          {order.status === "pending" && (blockedMatOrders.has(order.id) || missingFulfillmentSupplies.length > 0 || (inkPercent<=0 && (matAvailability.allocations.get(order.id)?.toPrint??0)>0)) && (
+                            <span className="issue-pill mat-shortage-pill" title={[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies, inkPercent<=0 && (matAvailability.allocations.get(order.id)?.toPrint??0)>0?"ink":null].filter(Boolean).join(", ")}>
+                              <AlertTriangle size={13} aria-hidden="true" /> Unable to ship · {[blockedMatOrders.has(order.id) ? "mats" : null, ...missingFulfillmentSupplies, inkPercent<=0 && (matAvailability.allocations.get(order.id)?.toPrint??0)>0?"ink":null].filter(Boolean).join(", ")}
                             </span>
                           )}
                         </td>
@@ -1693,6 +1700,7 @@ export default function Dashboard({
                                   <li key={`${item.name}-${index}`}>
                                     <span>{item.name}</span>
                                     <strong>Qty {item.quantity}</strong>
+                                    {order.status==="pending"&&matStockChecked&&<small>{matAvailability.allocations.get(order.id)?.lines.find(line=>line.name===item.name)?.printed||0} from printed stock</small>}
                                   </li>
                                 ))}
                               </ul>

@@ -86,15 +86,15 @@ async function queueDailySummary() {
   const matAvailability = getMatAvailability(orders, Number(levels.blank_mats || 0), finishedMats.data ?? []);
   const tapeCapacity = Math.max(0, Number(levels.packing_tape || 0) * Math.max(1, Number(levels.packing_tape_coverage || 1)) - Number(levels.packing_tape_usage || 0) - committed);
   const available = {
-    mats: matAvailability.availableBlanks, boxes: Math.max(0, Number(levels.shipping_boxes || 0) - committed),
-    cards: Math.max(0, Number(levels.thank_you_cards || 0) - committed), bags: Math.max(0, Number(levels.poly_bags || 0) - committed), tape: tapeCapacity,
+    mats: matAvailability.availableBlanks, boxes: Math.max(0, Number(levels.shipping_boxes || 0) - pending.reduce((sum,o)=>sum+Math.ceil(o.quantity/2),0)),
+    cards: Math.max(0, Number(levels.thank_you_cards || 0) - pending.length), bags: Math.max(0, Number(levels.poly_bags || 0) - committed), tape: tapeCapacity,
   };
-  const capacity = Math.min(available.mats, available.boxes, available.cards, available.bags, available.tape);
+  const capacity = Math.min(available.mats + matAvailability.availablePrinted, available.boxes, available.cards, available.bags, available.tape);
   const missingSupplies = Number(levels.shipping_boxes || 0) <= 0 || Number(levels.thank_you_cards || 0) <= 0 ||
-    Number(levels.poly_bags || 0) <= 0 || Number(levels.ink || 0) <= 0 ||
+    Number(levels.poly_bags || 0) <= 0 ||
     Number(levels.packing_tape || 0) * Math.max(1, Number(levels.packing_tape_coverage || 1)) - Number(levels.packing_tape_usage || 0) <= 0;
   const heldIds = new Set(activeIssues.map(({ order }) => order.id));
-  for (const order of pending) if (missingSupplies || matAvailability.blockedOrderIds.has(order.id)) heldIds.add(order.id);
+  for (const order of pending) if (missingSupplies || matAvailability.blockedOrderIds.has(order.id) || (Number(levels.ink || 0)<=0 && (matAvailability.allocations.get(order.id)?.toPrint??0)>0)) heldIds.add(order.id);
   const lowSupplies = [available.mats <= 0 ? "blank coir mats" : null, available.boxes <= 0 ? "shipping boxes" : null,
     available.cards <= 0 ? "thank-you cards" : null, available.bags <= 0 ? "poly bags" : null,
     available.tape <= 0 ? "packing tape" : null, Number(levels.ink || 0) <= 25 ? "black ink" : null].filter((name): name is string => name !== null);
@@ -106,8 +106,8 @@ async function queueDailySummary() {
   const detailItems: Array<{heading:string;lines:string[]}> = [
     { heading: "Last 24 hours", lines: [`New orders: ${newOrders.length}`, `Shipped orders: ${shippedOrders.length}`] },
     { heading: "Overview", lines: [`Pipeline: ${pending.length} orders (${committed} units)`, `Active shipping issues: ${activeIssues.length}`, `Orders on hold: ${heldIds.size}`, `Confirmed delivered in current history: ${orders.filter(order => order.status === "delivered").length}`, `Available capacity: ${capacity} orders`] },
-    { heading: "Production and payment", lines: [`Awaiting production: ${Math.max(0, pending.length - Number(state.data?.orders_in_production || 0))} orders`, `In production: ${Number(state.data?.orders_in_production || 0)} orders`, `Balance due: ${currency(Number(balance.data || 0))}`] },
-    { heading: "Inventory after commitments", lines: [`Blank mats: ${available.mats}`, `Shipping boxes: ${available.boxes}`, `Packing tape capacity: ${available.tape} mats`, `Thank-you cards: ${available.cards}`, `Poly bags: ${available.bags}`, `Black ink: ${Number(levels.ink || 0)}%`] },
+    { heading: "Production and payment", lines: [`Awaiting production: ${Math.max(0, pending.length - matAvailability.readyOrderIds.size - Number(state.data?.orders_in_production || 0))} orders`, `In production: ${Number(state.data?.orders_in_production || 0)} orders`, `Balance due: ${currency(Number(balance.data || 0))}`] },
+    { heading: "Inventory after commitments", lines: [`Unreserved printed mats: ${matAvailability.availablePrinted}`,`Pending orders covered by printed stock: ${matAvailability.readyOrderIds.size}`,`Blank mats: ${available.mats}`, `Shipping boxes: ${available.boxes}`, `Packing tape capacity: ${available.tape} mats`, `Thank-you cards: ${available.cards}`, `Poly bags: ${available.bags}`, `Black ink: ${Number(levels.ink || 0)}%`] },
   ];
   for (const { issue, order } of activeIssues) {
     detailItems.push({ heading: `Issue — Order ${issue.order_number}`, lines: [
@@ -168,20 +168,23 @@ export function validPushEndpoint(endpoint: string) {
 }
 async function scanSupplies() {
   const db = getSupabaseAdmin();
-  const [stock, result] = await Promise.all([
+  const [stock, result, printed] = await Promise.all([
     db
       .from("marsh_inventory")
       .select("item_key,quantity")
       .eq("account_slug", "marsh-supply"),
     getShipStationOrders(),
+    db.from("marsh_finished_mats").select("design_key,quantity").eq("account_slug","marsh-supply"),
   ]);
-  if (stock.error || !result.connected) return;
+  if (printed.error || stock.error || !result.connected) return;
   const levels = Object.fromEntries(
     stock.data.map((r) => [r.item_key, Number(r.quantity)]),
   );
   const committed = result.orders
     .filter((o) => o.status === "pending")
     .reduce((s, o) => s + o.quantity, 0);
+  const pending=result.orders.filter(o=>o.status==="pending");
+  const allocation=getMatAvailability(result.orders,levels.blank_mats||0,printed.data||[]);
   for (const [key, label, unit] of [
     ["blank_mats", "Blank coir mats", "mats"],
     ["shipping_boxes", "Shipping boxes", "boxes"],
@@ -192,7 +195,7 @@ async function scanSupplies() {
   ]) {
     if (levels[key] === undefined) continue;
     const threshold = key === "ink" ? 25 : 0;
-    let available = key === "ink" ? levels[key] : levels[key] - committed;
+    let available = key === "ink" ? levels[key] : key === "blank_mats" ? allocation.availableBlanks : key === "shipping_boxes" ? levels[key]-pending.reduce((sum,o)=>sum+Math.ceil(o.quantity/2),0) : key === "thank_you_cards" ? levels[key]-pending.length : levels[key]-committed;
     if (key === "packing_tape") {
       if (
         levels.packing_tape_coverage === undefined ||

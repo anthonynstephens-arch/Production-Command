@@ -10,13 +10,14 @@ export async function GET() {
   const session = await getPortalSession();
   if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const db = getSupabaseAdmin();
-  const [payments, deliveries, charges] = await Promise.all([
-    db.from("marsh_payments").select("*").order("created_at", { ascending: false }).limit(50),
-    db.from("marsh_incoming_deliveries").select("*").order("created_at", { ascending: false }).limit(50),
-    db.from("marsh_charges").select("*").order("charge_date", { ascending: false }).order("created_at", { ascending: false }).limit(50),
+  const [payments, deliveries, credits, charges] = await Promise.all([
+    db.from("marsh_payments").select("*").order("created_at", { ascending: false }),
+    db.from("marsh_incoming_deliveries").select("*").order("created_at", { ascending: false }),
+    db.from("marsh_defective_mats").select("id,quantity,reason,credit_amount,credited_at").not("credited_at","is",null).order("credited_at",{ascending:false}),
+    db.from("marsh_charges").select("*").order("charge_date", { ascending: false }).order("created_at", { ascending: false }),
   ]);
-  if (payments.error || deliveries.error || charges.error) return Response.json({ error: "Could not load operations records." }, { status: 500 });
-  return Response.json({ payments: payments.data, deliveries: deliveries.data, charges: charges.data });
+  if (payments.error || deliveries.error || charges.error || credits.error) return Response.json({ error: "Could not load operations records." }, { status: 500 });
+  return Response.json({ payments: payments.data, deliveries: deliveries.data, charges: charges.data, credits: credits.data });
 }
 
 export async function POST(request: Request) {

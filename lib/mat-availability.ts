@@ -28,10 +28,12 @@ export function getMatAvailability(
   let blankDemand = 0;
   const blockedOrderIds = new Set<string>();
   const shortages = new Map<string, number>();
+  const allocations = new Map<string,{printed:number;toPrint:number;lines:Array<{name:string;printed:number;toPrint:number}>}>();
   const pending = orders.filter((order) => order.status === "pending").sort((a, b) =>
     (Date.parse(a.orderDate) || 0) - (Date.parse(b.orderDate) || 0) || a.id.localeCompare(b.id),
   );
   for (const order of pending) {
+    const allocation={printed:0,toPrint:0,lines:[] as Array<{name:string;printed:number;toPrint:number}>};
     const lines = order.items?.length ? order.items : [{ name: order.item, quantity: order.quantity }];
     for (const item of lines) {
       if (!Number.isFinite(item.quantity) || item.quantity <= 0 || /discount|coupon|shipping|tax|gift card/i.test(item.name)) continue;
@@ -40,6 +42,9 @@ export function getMatAvailability(
       const fromPrinted = Math.min(ready, item.quantity);
       if (key) printed.set(key, ready - fromPrinted);
       const toPrint = item.quantity - fromPrinted;
+      allocation.printed+=fromPrinted;
+      allocation.toPrint+=toPrint;
+      allocation.lines.push({name:item.name,printed:fromPrinted,toPrint});
       blankDemand += toPrint;
       const fromBlanks = Math.min(blanks, toPrint);
       blanks -= fromBlanks;
@@ -50,11 +55,16 @@ export function getMatAvailability(
         shortages.set(label, (shortages.get(label) ?? 0) + missing);
       }
     }
+    allocations.set(order.id,allocation);
   }
   return {
     blockedOrderIds,
     blankDemand,
     availableBlanks: blanks,
+    availablePrinted: [...printed.values()].reduce((sum,count)=>sum+count,0),
+    availablePrintedByDesign: Object.fromEntries(printed),
+    allocations,
+    readyOrderIds: new Set([...allocations].filter(([,a])=>a.printed>0&&a.toPrint===0).map(([id])=>id)),
     missingMats: [...shortages.values()].reduce((sum, count) => sum + count, 0),
     shortages: [...shortages].map(([name, quantity]) => ({ name, quantity })),
   };
