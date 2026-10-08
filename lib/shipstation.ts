@@ -80,13 +80,6 @@ type LegacyShipStationShipment = {
   voided?: boolean;
 };
 
-const demoOrders: PortalOrder[] = [
-  { id: "demo-1", orderNumber: "MS-1087", customer: "Danielle Carter", item: "Whatupdoe Welcome Mat", quantity: 1, status: "pending", orderDate: "2026-09-12T13:20:00Z" },
-  { id: "demo-2", orderNumber: "MS-1086", customer: "Marcus Hill", item: "Did You Call First Mat", quantity: 2, status: "pending", orderDate: "2026-09-12T10:05:00Z" },
-  { id: "demo-3", orderNumber: "MS-1084", customer: "Keisha Brown", item: "Whatupdoe Welcome Mat", quantity: 1, status: "shipped", orderDate: "2026-09-10T14:15:00Z", shipDate: "2026-09-12T09:10:00Z", trackingNumber: "1Z8Y03W90378124510", carrier: "UPS" },
-  { id: "demo-4", orderNumber: "MS-1079", customer: "Terrence Williams", item: "Whatupdoe Welcome Mat", quantity: 1, status: "delivered", orderDate: "2026-09-06T15:35:00Z", shipDate: "2026-09-08T12:30:00Z", trackingNumber: "9400111899560000001024", carrier: "USPS" },
-];
-
 type RawLineItem = {
   name?: string;
   quantity?: number;
@@ -121,7 +114,7 @@ function normalizeStatus(value?: string, _shipDate?: string, trackingNumber?: st
 export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; connected: boolean; message?: string }> {
   const apiKey = process.env.SHIPSTATION_API_KEY;
   const apiSecret = process.env.SHIPSTATION_API_SECRET;
-  if (!apiKey) return { orders: demoOrders, connected: false, message: "Add the ShipStation API key to activate live syncing." };
+  if (!apiKey) return { orders: [], connected: false, message: "Add the ShipStation API key to activate live syncing." };
 
   try {
     // Accounts that provide both an API key and secret use ShipStation's
@@ -224,6 +217,6 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
     }
     throw new Error(`ShipStation API returned ${response.status}.`);
   } catch (error) {
-    return { orders: demoOrders, connected: false, message: error instanceof Error ? error.message : "ShipStation sync unavailable" };
+    return { orders: [], connected: false, message: error instanceof Error ? error.message : "ShipStation sync unavailable" };
   }
 }

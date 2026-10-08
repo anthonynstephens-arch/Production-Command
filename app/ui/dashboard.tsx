@@ -1,7 +1,7 @@
 "use client";
 import type { RecentIssueEvent } from "@/lib/fulfillment-overview";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -29,6 +29,7 @@ import {
   Flag,
   CircleCheck,
   CalendarDays,
+  CreditCard,
 } from "lucide-react";
 import { awaitingMatTotal } from "@/lib/fulfillment-overview";
 import type { PortalOrder } from "@/lib/shipstation";
@@ -39,6 +40,8 @@ import PortalAccess from "./portal-access";
 import NotificationSettings, {
   disconnectPushDevice,
 } from "./notification-settings";
+import DefectiveMats from "./defective-mats";
+import { workspaceSections, workspaceSectionForHash, type WorkspaceSection } from "@/lib/workspace-navigation";
 import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
@@ -79,14 +82,14 @@ type FinishedMat = {
 };
 
 const defaults: Supply = {
-  mats: 250,
-  boxes: 250,
-  ink: 82,
-  tape: 24,
+  mats: 0,
+  boxes: 0,
+  ink: 0,
+  tape: 0,
   tapeCoverage: 25,
   tapeUsage: 0,
-  thankYouCards: 250,
-  polyBags: 250,
+  thankYouCards: 0,
+  polyBags: 0,
 };
 
 function Meter({
@@ -297,6 +300,11 @@ export default function Dashboard({
   session,
 }: Props) {
   const router = useRouter();
+  const [activeSection,setActiveSection]=useState<WorkspaceSection>("overview");
+  const [stockError,setStockError]=useState("");
+  const syncBusy=useRef(false);
+  useEffect(()=>{const select=()=>{setActiveSection(workspaceSectionForHash(window.location.hash));setMobileMenuOpen(false)};select();window.addEventListener("hashchange",select);return()=>window.removeEventListener("hashchange",select)},[]);
+  useEffect(()=>{const target=document.getElementById(window.location.hash.slice(1));if(target&&!workspaceSections.some(s=>s.href===window.location.hash)&&!target.closest("[hidden]"))target.scrollIntoView({block:"start"});else window.scrollTo({top:0});},[activeSection]);
   const [supplies, setSupplies] = useState<Supply>(defaults);
   const [orders, setOrders] = useState(initialOrders);
   const [connected, setConnected] = useState(initialConnected);
@@ -305,7 +313,7 @@ export default function Dashboard({
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState("");
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | PortalOrder["status"]>("all");
+  const [filter, setFilter] = useState<"all" | "ready" | "held" | "to-print" | PortalOrder["status"]>("pending");
   const [view, setView] = useState<"admin" | "marsh">(
     session.role === "admin" ? "admin" : "marsh",
   );
@@ -344,11 +352,12 @@ export default function Dashboard({
       throw new Error(data.error || "Could not load inventory.");
     setSupplies((current) => ({ ...current, ...data.inventory }));
     setInventoryLoaded(Number.isFinite(data.inventory?.mats));
+    setStockError("");
   };
 
   useEffect(() => {
-    loadInventory().catch(() => {});
-    const refresh = () => loadInventory().catch(() => {});
+    loadInventory().catch(error => setStockError(error.message));
+    const refresh = () => loadInventory().catch(error => setStockError(error.message));
     const timer = window.setInterval(refresh, 15000);
     window.addEventListener("focus", refresh);
     window.addEventListener("marsh-inventory-changed", refresh);
@@ -422,43 +431,6 @@ export default function Dashboard({
     }
   };
 
-  useEffect(() => {
-    const shippedOrders = orders.filter(
-      (order) =>
-        (order.status === "shipped" || order.status === "delivered") &&
-        order.quantity > 0,
-    );
-    if (!shippedOrders.length) return;
-    let cancelled = false;
-    const applyShipmentUsage = async () => {
-      const response = await fetch("/api/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shipments: shippedOrders.map((order) => ({
-            id: order.id,
-            units: order.quantity,
-            designs: (order.items?.length
-              ? order.items
-              : [{ name: order.item, quantity: order.quantity }]
-            ).flatMap((item) => {
-              const key = designKey(item.name);
-              return key ? [{ key, quantity: item.quantity }] : [];
-            }),
-          })),
-        }),
-      });
-      if (response.ok && !cancelled) {
-        await loadInventory();
-        await loadOperationalData();
-      }
-    };
-    applyShipmentUsage().catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [orders]);
-
   const setSupply = async (key: keyof Supply, value: number) => {
     if (view !== "admin") throw new Error("Admin access required.");
     const response = await fetch("/api/inventory", {
@@ -471,13 +443,7 @@ export default function Dashboard({
       throw new Error(data.error || "Could not save inventory.");
     setSupplies((current) => ({ ...current, [key]: data.value }));
   };
-  const receiveSupply = async (key: SupplyKey, quantity: number) => {
-    const nextValue =
-      key === "ink"
-        ? Math.min(100, supplies[key] + quantity)
-        : supplies[key] + quantity;
-    await setSupply(key, nextValue);
-  };
+  const receiveSupply = async () => { await loadInventory(); };
 
   const flagOrder = async (order: PortalOrder) => {
     setIssueError("");
@@ -548,6 +514,7 @@ export default function Dashboard({
   };
 
   const sync = async () => {
+    if(syncBusy.current)return;syncBusy.current=true;
     setSyncing(true);
     setSyncError("");
     try {
@@ -562,6 +529,8 @@ export default function Dashboard({
       }
       setOrders(data.orders);
       setConnected(true);
+      await Promise.all([loadInventory(),loadOperationalData()]);
+      if(data.inventorySync?.ok===false)setStockError("Orders refreshed, but inventory reconciliation failed. Retry refresh before relying on availability.");
       setSyncMessage(data.message);
       setLastSync(
         new Date().toLocaleTimeString([], {
@@ -576,6 +545,7 @@ export default function Dashboard({
           : "Could not refresh orders. Please try again.",
       );
     } finally {
+      syncBusy.current=false;
       setSyncing(false);
     }
   };
@@ -649,25 +619,6 @@ export default function Dashboard({
     return totals;
   }, [orders]);
 
-  const issueRank = new Map(
-    currentOrderIssues.map((issue, index) => [issue.order_id, index]),
-  );
-  const filtered = orders
-    .filter(
-      (order) =>
-        (filter === "all" || order.status === filter) &&
-        `${order.orderNumber} ${order.customer} ${order.item} ${order.items?.map((item) => item.name).join(" ") ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-    )
-    .sort((a, b) => {
-      const aRank = issueRank.get(a.id);
-      const bRank = issueRank.get(b.id);
-      if (aRank !== undefined && bRank !== undefined) return aRank - bRank;
-      if (aRank !== undefined) return -1;
-      if (bRank !== undefined) return 1;
-      return 0;
-    });
   const committedUnits = orders
     .filter((order) => order.status === "pending")
     .reduce((sum, order) => sum + order.quantity, 0);
@@ -790,6 +741,26 @@ export default function Dashboard({
     blockedMatOrders.has(order.id) || (inventoryLoaded && (missingFulfillmentSupplies.length > 0 || (inkPercent<=0 && (matAvailability.allocations.get(order.id)?.toPrint??0)>0)))
   )).map(order => order.id));
 
+  const issueRank = new Map(
+    currentOrderIssues.map((issue, index) => [issue.order_id, index]),
+  );
+  const filtered = orders
+    .filter(
+      (order) =>
+        (filter === "all" || order.status === filter || (filter === "ready" && matAvailability.readyOrderIds.has(order.id) && !heldOrderIds.has(order.id)) || (filter === "held" && heldOrderIds.has(order.id)) || (filter === "to-print" && (matAvailability.allocations.get(order.id)?.toPrint ?? 0)>0)) &&
+        `${order.orderNumber} ${order.customer} ${order.item} ${order.items?.map((item) => item.name).join(" ") ?? ""}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase()),
+    )
+    .sort((a, b) => {
+      const aRank = issueRank.get(a.id);
+      const bRank = issueRank.get(b.id);
+      if (aRank !== undefined && bRank !== undefined) return aRank - bRank;
+      if (aRank !== undefined) return -1;
+      if (bRank !== undefined) return 1;
+      return 0;
+    });
+
   return (
     <main className="dashboard">
       <header className="topbar">
@@ -853,38 +824,7 @@ export default function Dashboard({
               {connected ? "ShipStation connected" : "ShipStation setup needed"}
             </div>
             <nav aria-label="Mobile dashboard sections">
-              <a href="#overview" onClick={() => setMobileMenuOpen(false)}>
-                Overview
-              </a>
-              {session.role === "admin" && (
-                <a
-                  href="#portal-users"
-                  onClick={() => {
-                    setView("admin");
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  Manage users
-                </a>
-              )}
-              <a href="#inventory" onClick={() => setMobileMenuOpen(false)}>
-                Inventory
-              </a>
-              <a href="#next-production-run" onClick={() => setMobileMenuOpen(false)}>
-                Next production run <span className="nav-new-badge">NEW</span>
-              </a>
-              <a href="#pipeline" onClick={() => setMobileMenuOpen(false)}>
-                Orders &amp; capacity
-              </a>
-              <a href="#mat-sales" onClick={() => setMobileMenuOpen(false)}>
-                Mat sales
-              </a>
-              <a href="#operations" onClick={() => setMobileMenuOpen(false)}>
-                Payments &amp; deliveries
-              </a>
-              <a href="#order-queue" onClick={() => setMobileMenuOpen(false)}>
-                Fulfillment queue
-              </a>
+              {workspaceSections.map(section=><a key={section.id} href={section.href} aria-current={activeSection===section.id?"page":undefined} onClick={()=>setMobileMenuOpen(false)}>{section.label}</a>)}
               <NotificationSettings isAdmin={session.role === "admin"} />
             </nav>
             <div className="mobile-menu-actions">
@@ -926,49 +866,45 @@ export default function Dashboard({
       <div className="page-shell">
         <nav className="dashboard-nav" aria-label="Dashboard sections">
           <div className="dashboard-nav-heading">WORKSPACE <span>Marsh Supply</span></div>
-          <a href="#overview"><RectangleHorizontal size={18} /> Overview</a>
-          {session.role === "admin" && (
-            <a
-              href="#portal-users"
-              onClick={() => {
-                setView("admin");
-                setMobileMenuOpen(false);
-              }}
-            >
-              <ShieldCheck size={18} /> Manage users
-            </a>
-          )}
-          <a href="#inventory"><Boxes size={18} /> Inventory</a>
-          <a href="#next-production-run"><CalendarDays size={18} /> Next production run <span className="nav-new-badge">NEW</span></a>
-          <a href="#pipeline"><Factory size={18} /> Orders &amp; capacity</a>
-          <a href="#mat-sales"><TrendingUp size={18} /> Mat sales</a>
-          <a href="#operations"><Truck size={18} /> Payments &amp; deliveries</a>
-          <a href="#order-queue"><PackageCheck size={18} /> Fulfillment queue</a>
-          <NotificationSettings isAdmin={session.role === "admin"} />
-          <a
-            href="/marsh-service-agreement.pdf"
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            <ShieldCheck size={18} /> Service Agreement
-          </a>
+          {workspaceSections.map(section=><a key={section.id} href={section.href} aria-current={activeSection===section.id?"page":undefined}><span className="nav-marker" aria-hidden="true">{section.number}</span>{section.label}</a>)}
+          <div className="nav-utilities"><NotificationSettings isAdmin={session.role === "admin"}/><a href="/marsh-service-agreement.pdf" target="_blank" rel="noreferrer"><ShieldCheck size={16}/> Service agreement</a></div>
         </nav>
+        <div className="workspace-header"><div><p className="eyebrow">MARSH SUPPLY · FULFILLMENT</p><h1>{workspaceSections.find(section=>section.id===activeSection)?.label}</h1><p>{workspaceSections.find(section=>section.id===activeSection)?.description}</p></div><button className="sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing?"spin":""}/>{syncing?"Refreshing…":"Refresh data"}</button></div>
+        <label className="workspace-mobile-select">Go to section<select value={activeSection} onChange={e=>{window.location.hash=workspaceSections.find(section=>section.id===e.target.value)!.href.slice(1)}}>{workspaceSections.map(section=><option key={section.id} value={section.id}>{section.label}</option>)}</select></label>
+        <div className="sync-feedback" role="status" aria-live="polite">
+          {syncing ? (
+            "Checking ShipStation for updates…"
+          ) : syncError ? (
+            <span className="sync-error">
+              {syncError} Displayed orders have not been replaced.
+            </span>
+          ) : lastSync ? (
+            `Orders refreshed at ${lastSync}.`
+          ) : connected ? (
+            "ShipStation orders loaded with this page."
+          ) : (
+            "Live order data is unavailable"
+          )}
+        </div>
+        {!connected && (
+          <div className="setup-banner">
+            <AlertTriangle size={18} />
+            <div>
+              <strong>Order data is unavailable.</strong>
+              <span>
+                {syncMessage ?? "Add the API key to activate order syncing."}{" "}
+                Refresh to try again. No sample orders are included in your totals.
+              </span>
+            </div>
+          </div>
+        )}
 
-
+        {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
+        <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
         <section className="overview-summary" id="overview">
           <div className="overview-topline">
-            <p className="kicker">MARSH SUPPLY FULFILLMENT OVERVIEW</p>
-            {session.role === "admin" && (
-              <button
-                className="sync-button page-sync-button"
-                onClick={sync}
-                disabled={syncing}
-              >
-                <RefreshCw size={17} className={syncing ? "spin" : ""} />
-                {syncing ? "Syncing…" : "Sync ShipStation"}
-              </button>
-            )}
+            <p className="kicker">AT A GLANCE</p>
+
           </div>
           <div className="overview-alerts" aria-label="Fulfillment alerts">
             {heldOrderIds.size > 0 && <a className="summary-copy order-issue-alert" href="#order-queue">
@@ -1017,42 +953,34 @@ export default function Dashboard({
           </div>
         </section>
 
-        <ProductionPlan
-          isAdmin={session.role === "admin" && view === "admin"}
-          blankMats={supplies.mats}
-          pendingByDesign={pendingByDesign}
-          finishedMats={finishedMats}
-        />
-
-
-        <div className="sync-feedback" role="status" aria-live="polite">
-          {syncing ? (
-            "Checking ShipStation for updates…"
-          ) : syncError ? (
-            <span className="sync-error">
-              {syncError} Displayed orders have not been replaced.
-            </span>
-          ) : lastSync ? (
-            `Orders refreshed at ${lastSync}.`
-          ) : connected ? (
-            "ShipStation orders loaded with this page."
-          ) : (
-            "Demo data · live orders unavailable"
-          )}
-        </div>
-        {!connected && (
-          <div className="setup-banner">
-            <AlertTriangle size={18} />
-            <div>
-              <strong>Live ShipStation data is not connected yet.</strong>
-              <span>
-                {syncMessage ?? "Add the API key to activate order syncing."}{" "}
-                Showing representative data until setup is completed.
-              </span>
+        <div className="overview-shortcuts"><a href="#order-queue"><PackageCheck size={22}/><strong>Work the order queue</strong><span>{pipelineOrders} pending · {matAvailability.readyOrderIds.size} covered by printed stock</span></a><a href="#production-runs"><Factory size={22}/><strong>Manage production runs</strong><span>Schedule, track, and reconcile each batch</span></a><a href="#operations"><CreditCard size={22}/><strong>Review the account</strong><span>Payments, credits, and incoming deliveries</span></a></div>
+        <section className="insights-row cadence-only">
+          <article className="panel cadence-panel">
+            <p className="eyebrow">FULFILLMENT CADENCE</p>
+            <h2>Monday · Wednesday · Friday</h2>
+            <p>
+              Orders are prepared and processed through ShipStation three days
+              each week.
+            </p>
+            <div className="cadence-days">
+              <span className="active">M</span>
+              <span>T</span>
+              <span className="active">W</span>
+              <span>T</span>
+              <span className="active">F</span>
+              <span>S</span>
+              <span>S</span>
             </div>
-          </div>
-        )}
+            <div className="next-run">
+              <Truck size={17} />
+              <span>Next processing run</span>
+              <strong>{(() => { const today = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(new Intl.DateTimeFormat("en-US",{weekday:"short",timeZone:"America/Detroit"}).format(new Date())); const offset = [1,3,5].map(day => (day-today+7)%7).sort((a,b)=>a-b)[0]; return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][(today+offset)%7]; })()}</strong>
+            </div>
+          </article>
+        </section>
 
+        </div>
+        <div className="workspace-pane" data-workspace="orders" hidden={activeSection!=="orders"}>
         <div
           className="dashboard-section-heading pipeline-heading"
           id="pipeline"
@@ -1086,7 +1014,7 @@ export default function Dashboard({
               <p>Orders in production</p>
             </div>
             <div className="metric-value">
-              <strong>{ordersInProduction}</strong>
+              <strong>{Math.min(ordersInProduction,Math.max(0,counts.pending-matAvailability.readyOrderIds.size))}</strong>
               <small>Currently being produced</small>
               {session.role === "admin" && view === "admin" && (
                 <div className="production-adjust">
@@ -1139,11 +1067,11 @@ export default function Dashboard({
               <span className="metric-icon violet">
                 <TrendingUp size={23} />
               </span>
-              <p>Total units</p>
+              <p>Covered by printed stock</p>
             </div>
             <div className="metric-value">
-              <strong>{counts.units}</strong>
-              <small>Across visible orders</small>
+              <strong>{matAvailability.readyOrderIds.size}</strong>
+              <small>Check holds before packing</small>
             </div>
           </article>
           <article className="metric issues-metric">
@@ -1160,393 +1088,6 @@ export default function Dashboard({
           </article>
         </section>
 
-        <section className="analytics-row" aria-label="Order analytics">
-          <article className="panel analytics-panel">
-            <div className="analytics-heading">
-              <div>
-                <p className="eyebrow">CURRENT QUEUE</p>
-                <h2>Order movement</h2>
-              </div>
-              <strong>{orders.length} <span>loaded orders</span></strong>
-            </div>
-            <div className="movement-chart">
-              {[
-                { label: "Awaiting production", value: ordersAwaitingProduction, tone: "amber" },
-                { label: "In production", value: ordersInProduction, tone: "violet" },
-                { label: "Shipped", value: counts.shipped, tone: "blue" },
-                { label: "Delivered", value: counts.delivered, tone: "green" },
-              ].map((item) => (
-                <div className="movement-row" key={item.label}>
-                  <span>{item.label}</span>
-                  <div className="movement-track" role="img" aria-label={`${item.label}: ${item.value} orders`}>
-                    <i className={item.tone} style={{ width: `${orders.length ? Math.max(item.value > 0 ? 2 : 0, item.value / orders.length * 100) : 0}%` }} />
-                  </div>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
-          </article>
-          <article className="panel analytics-panel completion-panel">
-            <div className="analytics-heading">
-              <div>
-                <p className="eyebrow">FULFILLMENT</p>
-                <h2>Delivered orders</h2>
-              </div>
-            </div>
-            <div className="completion-body">
-              <div className="completion-donut" role="img" aria-label={`${counts.delivered} of ${orders.length} loaded orders delivered`} style={{ "--completion": `${orders.length ? counts.delivered / orders.length * 100 : 0}%` } as React.CSSProperties}>
-                <div><strong>{orders.length ? Math.round(counts.delivered / orders.length * 100) : 0}%</strong><span>delivered</span></div>
-              </div>
-              <div className="completion-legend">
-                <div><i className="delivered-dot" /><span>Delivered</span><strong>{counts.delivered}</strong></div>
-                <div><i className="open-dot" /><span>Other statuses</span><strong>{Math.max(0, orders.length - counts.delivered)}</strong></div>
-              </div>
-            </div>
-          </article>
-        </section>
-
-
-        <OperationalCharts
-          orders={orders}
-          availability={[
-            { label: "Blank mats", value: availableMats, tone: "blue" },
-            { label: "Shipping boxes", value: availableBoxes, tone: "mint" },
-            { label: "Poly bags", value: availablePolyBags, tone: "orange" },
-            { label: "Thank-you cards", value: availableThankYouCards, tone: "purple" },
-          ]}
-        />
-
-        <article
-          className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}
-        >
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p>
-              <h2>{availableCapacity} orders</h2>
-            </div>
-            <span className="icon-box">
-              <Settings2 size={19} />
-            </span>
-          </div>
-          <p>
-            After reserving supplies for{" "}
-            <strong>{committedUnits} pending units</strong>, you can accept up
-            to <strong>{availableCapacity} additional single-mat orders</strong>
-            .
-          </p>
-          <p>{matAvailability.availablePrinted} unreserved printed mats + {availableMats} unreserved blanks. Printed stock must match the ordered design. {matAvailability.readyOrderIds.size} pending orders are covered by printed stock.</p>
-          {capacityBlockers.length > 0 ? (
-            <div className="capacity-blockers">
-              <strong>Fulfillment is blocked by:</strong>
-              <ul>
-                {capacityBlockers.map((supply) => (
-                  <li key={supply.label}>
-                    <AlertTriangle size={20} />
-                    <span>
-                      <b>{supply.available}</b> {supply.label} available
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="capacity-clear">
-              <PackageCheck size={21} />
-              <strong>All required supplies are available.</strong>
-            </div>
-          )}
-        </article>
-
-        <div className="dashboard-section-heading" id="inventory">
-          <div>
-            <span className="section-icon">
-              <Boxes size={18} />
-            </span>
-            <h2>Inventory &amp; Supplies</h2>
-          </div>
-          <p>On hand · committed · available</p>
-        </div>
-        <section className="supply-grid" id="supplies">
-          <SupplyCard
-            icon={<RectangleHorizontal size={23} />}
-            title="Blank coir mats"
-            value={supplies.mats}
-            unit="mats"
-            detail="Newly shipped units deduct automatically"
-            percent={supplies.mats > 25 ? 100 : supplies.mats * 4}
-            committed={matAvailability.blankDemand}
-            available={availableMats}
-            incoming={incoming.mats}
-            low={availableMats <= 0}
-            admin={view === "admin"}
-            onSet={(value) => setSupply("mats", value)}
-          />
-          <SupplyCard
-            icon={<Box size={21} />}
-            title="Shipping boxes"
-            value={supplies.boxes}
-            unit="boxes"
-            detail="One box reserved per pending unit"
-            percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4}
-            committed={committedBoxes}
-            available={availableBoxes}
-            incoming={incoming.boxes}
-            low={availableBoxes <= 0}
-            admin={view === "admin"}
-            onSet={(value) => setSupply("boxes", value)}
-          />
-          <SupplyCard
-            icon={<Package size={21} />}
-            title="Packing tape"
-            value={supplies.tape}
-            unit="rolls"
-            detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`}
-            percent={supplies.tape > 10 ? 100 : supplies.tape * 10}
-            committed={committedTapeRolls}
-            available={availableTape}
-            incoming={incoming.tape}
-            low={availableTapeMatCapacity <= 0}
-            admin={view === "admin"}
-            onSet={(value) => setSupply("tape", value)}
-            extraControl={
-              <label className="manual-adjust">
-                <span>Mats per roll</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={tapeCoverage}
-                  onChange={(event) =>
-                    setSupply(
-                      "tapeCoverage",
-                      Math.max(1, Number(event.target.value)),
-                    )
-                  }
-                />
-              </label>
-            }
-          />
-          <SupplyCard
-            icon={<Mail size={21} />}
-            title="Thank-you cards"
-            value={supplies.thankYouCards}
-            unit="cards"
-            detail="One reserved per pending mat"
-            percent={
-              supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4
-            }
-            committed={pendingOrders.length}
-            available={availableThankYouCards}
-            incoming={incoming.thankYouCards}
-            low={availableThankYouCards <= 0}
-            admin={view === "admin"}
-            onSet={(value) => setSupply("thankYouCards", value)}
-          />
-          <SupplyCard
-            icon={<ShoppingBag size={21} />}
-            title="Poly bags"
-            value={supplies.polyBags}
-            unit="bags"
-            detail="One reserved per pending mat"
-            percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4}
-            committed={committedUnits}
-            available={availablePolyBags}
-            incoming={incoming.polyBags}
-            low={availablePolyBags <= 0}
-            admin={view === "admin"}
-            onSet={(value) => setSupply("polyBags", value)}
-          />
-          <SupplyCard
-            icon={<Droplets size={21} />}
-            title="Ink supply"
-            value={inkPercent}
-            unit="%"
-            detail={
-              inkPercent < 50 ? "Reorder recommended" : "Supply level healthy"
-            }
-            percent={inkPercent}
-            incoming={incoming.ink}
-            purchaseUrl={inkPercent < 50 ? "https://www.amazon.com/dp/B000C1952Q?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1" : undefined}
-            verticalMeter
-            admin={view === "admin"}
-            onSet={(value) => setSupply("ink", Math.min(100, value))}
-          />
-        </section>
-
-        <div className="dashboard-section-heading" id="printed-mats">
-          <div>
-            <span className="section-icon">
-              <Factory size={18} />
-            </span>
-            <h2>Printed Mats Ready for Orders</h2>
-          </div>
-          <p>Finished on hand · committed · available</p>
-        </div>
-        <section className="finished-mats-grid">
-          {finishedMatCards.map((mat) => (
-            <article className="finished-mat-card" key={mat.design_key}>
-              <div>
-                <span>READY STOCK</span>
-                <h3>{mat.design_name}</h3>
-              </div>
-              <strong>{mat.quantity}</strong>
-              <div className="allocation">
-                <div>
-                  <span>Committed</span>
-                  <b>{mat.committed}</b>
-                </div>
-                <div>
-                  <span>Available</span>
-                  <b>{mat.available}</b>
-                </div>
-              </div>
-            </article>
-          ))}
-          {view === "admin" && (
-            <article className="finished-mat-card print-batch-card">
-              <div>
-                <span>ADJUST PRINTED STOCK</span>
-                <h3>Add or remove printed mats</h3>
-              </div>
-              <label>
-                Design
-                <select
-                  value={printBatch.designKey}
-                  onChange={(event) =>
-                    setPrintBatch({
-                      ...printBatch,
-                      designKey: event.target.value,
-                    })
-                  }
-                >
-                  {finishedMats.map((mat) => (
-                    <option key={mat.design_key} value={mat.design_key}>
-                      {mat.design_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Quantity change (+ / −)
-                <input
-                  type="number"
-                  min={-(finishedMats.find((mat) => mat.design_key === printBatch.designKey)?.quantity ?? 0)}
-                  max={Math.min(10000, supplies.mats)}
-                  step="1"
-                  placeholder="e.g. 10 or -5"
-                  value={printBatch.quantity}
-                  onChange={(event) =>
-                    setPrintBatch({
-                      ...printBatch,
-                      quantity: event.target.value,
-                    })
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                className="sync-button"
-                disabled={printSaving || !printBatch.quantity || !Number.isInteger(Number(printBatch.quantity)) || Number(printBatch.quantity) === 0 || Number(printBatch.quantity) < -Math.min(10000, finishedMats.find((mat) => mat.design_key === printBatch.designKey)?.quantity ?? 0) || Number(printBatch.quantity) > Math.min(10000, supplies.mats)}
-                onClick={recordPrintBatch}
-              >
-                {printSaving ? "Saving…" : Number(printBatch.quantity) < 0 ? "Remove printed mats" : "Add finished batch"}
-              </button>
-              {printMessage && <small role="status">{printMessage}</small>}
-              <p>
-                Positive quantities transfer blank mats into printed stock.
-                Negative quantities remove printed stock without adding blanks back.
-              </p>
-            </article>
-          )}
-        </section>
-
-        <div
-          className="dashboard-section-heading product-heading"
-          id="mat-sales"
-        >
-          <div>
-            <span className="section-icon">
-              <TrendingUp size={18} />
-            </span>
-            <h2>Mat Sales</h2>
-          </div>
-          <p>Design totals from loaded orders</p>
-        </div>
-        <section
-          className="panel mat-sales-chart"
-          aria-label="Mat sales by design"
-        >
-          <div className="chart-heading">
-            <div>
-              <p className="eyebrow">DESIGN COMPARISON</p>
-              <h2>Units sold</h2>
-            </div>
-            <strong>
-              {matSalesTotal}
-              <small> total mats</small>
-            </strong>
-          </div>
-          <div className="bar-chart">
-            {matSales.map((design) => (
-              <div className="bar-row" key={design.label}>
-                <div className="bar-label">
-                  <span>{design.label}</span>
-                  <strong>{design.value.toLocaleString()}</strong>
-                </div>
-                <div className="bar-track" aria-hidden="true">
-                  <span
-                    className={design.tone}
-                    style={{
-                      width: `${(design.value / largestMatTotal) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          {matSalesTotal === 0 && (
-            <p className="chart-empty">
-              No matching mat sales in the loaded orders yet.
-            </p>
-          )}
-        </section>
-
-        <section className="insights-row cadence-only">
-          <article className="panel cadence-panel">
-            <p className="eyebrow">FULFILLMENT CADENCE</p>
-            <h2>Monday · Wednesday · Friday</h2>
-            <p>
-              Orders are prepared and processed through ShipStation three days
-              each week.
-            </p>
-            <div className="cadence-days">
-              <span className="active">M</span>
-              <span>T</span>
-              <span className="active">W</span>
-              <span>T</span>
-              <span className="active">F</span>
-              <span>S</span>
-              <span>S</span>
-            </div>
-            <div className="next-run">
-              <Truck size={17} />
-              <span>Next processing run</span>
-              <strong>Monday</strong>
-            </div>
-          </article>
-        </section>
-
-        <div id="operations">
-          <FinancialLogistics
-            session={{
-              ...session,
-              canCreateCharges: session.canCreateCharges && view === "admin",
-            }}
-            onIncomingChange={setIncoming}
-            onInventoryReceived={receiveSupply}
-            onBalanceChange={setBalanceOwed}
-          />
-        </div>
-
         <section className="panel orders-panel" id="order-queue">
           <div className="orders-head">
             <div>
@@ -1560,7 +1101,7 @@ export default function Dashboard({
                   aria-label="Search fulfillment orders"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search orders"
+                  placeholder="Order number, customer, or design"
                 />
               </label>
               <select
@@ -1569,7 +1110,7 @@ export default function Dashboard({
                 onChange={(e) => setFilter(e.target.value as typeof filter)}
               >
                 <option value="all">All statuses</option>
-                <option value="pending">Pending</option>
+                <option value="pending">Pending orders</option><option value="ready">Ready from printed stock</option><option value="to-print">Needs printing</option><option value="held">On hold</option>
                 <option value="shipped">Shipped</option>
                 <option value="delivered">Delivered</option>
               </select>
@@ -1852,8 +1393,403 @@ export default function Dashboard({
             </span>
           </footer>
         </section>
+        </div>
+        <div className="workspace-pane" data-workspace="inventory" hidden={activeSection!=="inventory"}>
+        {!inventoryLoaded||!finishedMatsLoaded?<p role="status">Loading inventory…</p>:null}
+        <div hidden={!inventoryLoaded||!finishedMatsLoaded}>
+        <div className="dashboard-section-heading" id="inventory">
+          <div>
+            <span className="section-icon">
+              <Boxes size={18} />
+            </span>
+            <h2>Inventory &amp; Supplies</h2>
+          </div>
+          <p>On hand · committed · available</p>
+        </div>
+        <section className="supply-grid" id="supplies">
+          <SupplyCard
+            icon={<RectangleHorizontal size={23} />}
+            title="Blank coir mats"
+            value={supplies.mats}
+            unit="mats"
+            detail="Reserved only for mats that still need printing"
+            percent={supplies.mats > 25 ? 100 : supplies.mats * 4}
+            committed={matAvailability.blankDemand}
+            available={availableMats}
+            incoming={incoming.mats}
+            low={availableMats <= 0}
+            admin={view === "admin"}
+            onSet={(value) => setSupply("mats", value)}
+          />
+          <SupplyCard
+            icon={<Box size={21} />}
+            title="Shipping boxes"
+            value={supplies.boxes}
+            unit="boxes"
+            detail="One box per two mats in each order"
+            percent={supplies.boxes > 25 ? 100 : supplies.boxes * 4}
+            committed={committedBoxes}
+            available={availableBoxes}
+            incoming={incoming.boxes}
+            low={availableBoxes <= 0}
+            admin={view === "admin"}
+            onSet={(value) => setSupply("boxes", value)}
+          />
+          <SupplyCard
+            icon={<Package size={21} />}
+            title="Packing tape"
+            value={supplies.tape}
+            unit="rolls"
+            detail={`${supplies.tapeUsage} of ${tapeCoverage} mat uses on current roll`}
+            percent={supplies.tape > 10 ? 100 : supplies.tape * 10}
+            committed={committedTapeRolls}
+            available={availableTape}
+            incoming={incoming.tape}
+            low={availableTapeMatCapacity <= 0}
+            admin={view === "admin"}
+            onSet={(value) => setSupply("tape", value)}
+            extraControl={
+              <label className="manual-adjust">
+                <span>Mats per roll</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={tapeCoverage}
+                  onChange={(event) =>
+                    setSupply(
+                      "tapeCoverage",
+                      Math.max(1, Number(event.target.value)),
+                    )
+                  }
+                />
+              </label>
+            }
+          />
+          <SupplyCard
+            icon={<Mail size={21} />}
+            title="Thank-you cards"
+            value={supplies.thankYouCards}
+            unit="cards"
+            detail="One reserved per pending mat"
+            percent={
+              supplies.thankYouCards > 25 ? 100 : supplies.thankYouCards * 4
+            }
+            committed={pendingOrders.length}
+            available={availableThankYouCards}
+            incoming={incoming.thankYouCards}
+            low={availableThankYouCards <= 0}
+            admin={view === "admin"}
+            onSet={(value) => setSupply("thankYouCards", value)}
+          />
+          <SupplyCard
+            icon={<ShoppingBag size={21} />}
+            title="Poly bags"
+            value={supplies.polyBags}
+            unit="bags"
+            detail="One reserved per pending mat"
+            percent={supplies.polyBags > 25 ? 100 : supplies.polyBags * 4}
+            committed={committedUnits}
+            available={availablePolyBags}
+            incoming={incoming.polyBags}
+            low={availablePolyBags <= 0}
+            admin={view === "admin"}
+            onSet={(value) => setSupply("polyBags", value)}
+          />
+          <SupplyCard
+            icon={<Droplets size={21} />}
+            title="Ink supply"
+            value={inkPercent}
+            unit="%"
+            detail={
+              inkPercent < 50 ? "Reorder recommended" : "Supply level healthy"
+            }
+            percent={inkPercent}
+            incoming={incoming.ink}
+            purchaseUrl={inkPercent < 50 ? "https://www.amazon.com/dp/B000C1952Q?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1" : undefined}
+            verticalMeter
+            admin={view === "admin"}
+            onSet={(value) => setSupply("ink", Math.min(100, value))}
+          />
+        </section>
+
+        <div className="dashboard-section-heading" id="printed-mats">
+          <div>
+            <span className="section-icon">
+              <Factory size={18} />
+            </span>
+            <h2>Printed Mats Ready for Orders</h2>
+          </div>
+          <p>Finished on hand · committed · available</p>
+        </div>
+        <section className="finished-mats-grid">
+          {finishedMatCards.map((mat) => (
+            <article className="finished-mat-card" key={mat.design_key}>
+              <div>
+                <span>READY STOCK</span>
+                <h3>{mat.design_name}</h3>
+              </div>
+              <strong>{mat.quantity}</strong>
+              <div className="allocation">
+                <div>
+                  <span>Committed</span>
+                  <b>{mat.committed}</b>
+                </div>
+                <div>
+                  <span>Available</span>
+                  <b>{mat.available}</b>
+                </div>
+              </div>
+            </article>
+          ))}
+          {view === "admin" && (
+            <article className="finished-mat-card print-batch-card">
+              <div>
+                <span>ADJUST PRINTED STOCK</span>
+                <h3>Add or remove printed mats</h3>
+              </div>
+              <label>
+                Design
+                <select
+                  value={printBatch.designKey}
+                  onChange={(event) =>
+                    setPrintBatch({
+                      ...printBatch,
+                      designKey: event.target.value,
+                    })
+                  }
+                >
+                  {finishedMats.map((mat) => (
+                    <option key={mat.design_key} value={mat.design_key}>
+                      {mat.design_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Quantity change (+ / −)
+                <input
+                  type="number"
+                  min={-(finishedMats.find((mat) => mat.design_key === printBatch.designKey)?.quantity ?? 0)}
+                  max={Math.min(10000, supplies.mats)}
+                  step="1"
+                  placeholder="e.g. 10 or -5"
+                  value={printBatch.quantity}
+                  onChange={(event) =>
+                    setPrintBatch({
+                      ...printBatch,
+                      quantity: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="sync-button"
+                disabled={printSaving || !printBatch.quantity || !Number.isInteger(Number(printBatch.quantity)) || Number(printBatch.quantity) === 0 || Number(printBatch.quantity) < -Math.min(10000, finishedMats.find((mat) => mat.design_key === printBatch.designKey)?.quantity ?? 0) || Number(printBatch.quantity) > Math.min(10000, supplies.mats)}
+                onClick={recordPrintBatch}
+              >
+                {printSaving ? "Saving…" : Number(printBatch.quantity) < 0 ? "Remove printed mats" : "Add finished batch"}
+              </button>
+              {printMessage && <small role="status">{printMessage}</small>}
+              <p>
+                Positive quantities transfer blank mats into printed stock.
+                Negative quantities remove printed stock without adding blanks back.
+              </p>
+            </article>
+          )}
+        </section>
+
+        <article
+          className={`panel capacity-panel capacity-summary${capacityBlockers.length ? " blocked" : ""}`}
+        >
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">AVAILABLE AFTER COMMITMENTS</p>
+              <h2>{availableCapacity} orders</h2>
+            </div>
+            <span className="icon-box">
+              <Settings2 size={19} />
+            </span>
+          </div>
+          <p>
+            After reserving supplies for{" "}
+            <strong>{committedUnits} pending units</strong>, you can accept up
+            to <strong>{availableCapacity} additional single-mat orders</strong>
+            .
+          </p>
+          <p>{matAvailability.availablePrinted} unreserved printed mats + {availableMats} unreserved blanks. Printed stock must match the ordered design. {matAvailability.readyOrderIds.size} pending orders are covered by printed stock.</p>
+          {capacityBlockers.length > 0 ? (
+            <div className="capacity-blockers">
+              <strong>Additional capacity is limited by:</strong>
+              <ul>
+                {capacityBlockers.map((supply) => (
+                  <li key={supply.label}>
+                    <AlertTriangle size={20} />
+                    <span>
+                      <b>{supply.available}</b> {supply.label} available
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="capacity-clear">
+              <PackageCheck size={21} />
+              <strong>All required supplies are available.</strong>
+            </div>
+          )}
+        </article>
+
+        </div>
+        </div>
+        <div className="workspace-pane" data-workspace="production" hidden={activeSection!=="production"}>
+        <section id="production-runs" aria-labelledby="production-runs-title">
+          <div className="dashboard-section-heading">
+            <div><span className="section-icon"><CalendarDays size={18} /></span><h2 id="production-runs-title">Production Runs</h2></div>
+            <p>Current run, upcoming batches, and post-run breakdowns</p>
+          </div>
+          <ProductionPlan
+          isAdmin={session.role === "admin" && view === "admin"}
+          blankMats={supplies.mats}
+          pendingByDesign={pendingByDesign}
+          finishedMats={finishedMats}
+        />
+        </section>
+
+        </div>
+        <div className="workspace-pane" data-workspace="financial" hidden={activeSection!=="financial"}>
+        <div id="operations">
+          <FinancialLogistics
+            session={{
+              ...session,
+              role: view === "marsh" ? "partner" : session.role,
+              canCreateCharges: session.canCreateCharges && view === "admin",
+            }}
+            onIncomingChange={setIncoming}
+            onInventoryReceived={receiveSupply}
+            onBalanceChange={setBalanceOwed}
+          />
+        </div>
+
+        </div>
+        <div className="workspace-pane" data-workspace="defects" hidden={activeSection!=="defects"}>
+        <DefectiveMats session={{...session,role:view==="marsh"?"partner":session.role}} onChange={loadInventory}/>
+        </div>
+        <div className="workspace-pane" data-workspace="sales" hidden={activeSection!=="sales"}>
+        <div
+          className="dashboard-section-heading product-heading"
+          id="mat-sales"
+        >
+          <div>
+            <span className="section-icon">
+              <TrendingUp size={18} />
+            </span>
+            <h2>Mat Sales</h2>
+          </div>
+          <p>Design totals from loaded orders</p>
+        </div>
+        <section
+          className="panel mat-sales-chart"
+          aria-label="Mat sales by design"
+        >
+          <div className="chart-heading">
+            <div>
+              <p className="eyebrow">DESIGN COMPARISON</p>
+              <h2>Units sold</h2>
+            </div>
+            <strong>
+              {matSalesTotal}
+              <small> total mats</small>
+            </strong>
+          </div>
+          <div className="bar-chart">
+            {matSales.map((design) => (
+              <div className="bar-row" key={design.label}>
+                <div className="bar-label">
+                  <span>{design.label}</span>
+                  <strong>{design.value.toLocaleString()}</strong>
+                </div>
+                <div className="bar-track" aria-hidden="true">
+                  <span
+                    className={design.tone}
+                    style={{
+                      width: `${(design.value / largestMatTotal) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          {matSalesTotal === 0 && (
+            <p className="chart-empty">
+              No matching mat sales in the loaded orders yet.
+            </p>
+          )}
+        </section>
+
+        <OperationalCharts
+          orders={orders}
+          availability={[
+            { label: "Printed mats", value: matAvailability.availablePrinted, tone: "mint" },
+            { label: "Blank mats", value: availableMats, tone: "blue" },
+            { label: "Shipping boxes", value: availableBoxes, tone: "mint" },
+            { label: "Poly bags", value: availablePolyBags, tone: "orange" },
+            { label: "Thank-you cards", value: availableThankYouCards, tone: "purple" },
+          ]}
+        />
+
+        <section className="analytics-row" aria-label="Order analytics">
+          <article className="panel analytics-panel">
+            <div className="analytics-heading">
+              <div>
+                <p className="eyebrow">CURRENT QUEUE</p>
+                <h2>Order movement</h2>
+              </div>
+              <strong>{orders.length} <span>loaded orders</span></strong>
+            </div>
+            <div className="movement-chart">
+              {[
+                { label: "Awaiting production", value: ordersAwaitingProduction, tone: "amber" },
+                { label: "In production", value: Math.min(ordersInProduction,Math.max(0,counts.pending-matAvailability.readyOrderIds.size)), tone: "violet" },
+                { label: "Printed stock allocated", value: matAvailability.readyOrderIds.size, tone: "green" },
+                { label: "Shipped", value: counts.shipped, tone: "blue" },
+                { label: "Delivered", value: counts.delivered, tone: "green" },
+              ].map((item) => (
+                <div className="movement-row" key={item.label}>
+                  <span>{item.label}</span>
+                  <div className="movement-track" role="img" aria-label={`${item.label}: ${item.value} orders`}>
+                    <i className={item.tone} style={{ width: `${orders.length ? Math.max(item.value > 0 ? 2 : 0, item.value / orders.length * 100) : 0}%` }} />
+                  </div>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="panel analytics-panel completion-panel">
+            <div className="analytics-heading">
+              <div>
+                <p className="eyebrow">FULFILLMENT</p>
+                <h2>Delivered orders</h2>
+              </div>
+            </div>
+            <div className="completion-body">
+              <div className="completion-donut" role="img" aria-label={`${counts.delivered} of ${orders.length} loaded orders delivered`} style={{ "--completion": `${orders.length ? counts.delivered / orders.length * 100 : 0}%` } as React.CSSProperties}>
+                <div><strong>{orders.length ? Math.round(counts.delivered / orders.length * 100) : 0}%</strong><span>delivered</span></div>
+              </div>
+              <div className="completion-legend">
+                <div><i className="delivered-dot" /><span>Delivered</span><strong>{counts.delivered}</strong></div>
+                <div><i className="open-dot" /><span>Other statuses</span><strong>{Math.max(0, orders.length - counts.delivered)}</strong></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+
+        </div>
+        <div className="workspace-pane" data-workspace="team" hidden={activeSection!=="team"}>
         <PortalAccess />
         {session.role === "admin" && view === "admin" && <AccessManager />}
+        </div>
         <Messenger session={session} />
       </div>
     </main>

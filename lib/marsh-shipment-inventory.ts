@@ -15,7 +15,7 @@ export async function syncMarshShipmentInventory(orders: PortalOrder[]) {
       },
     )
     .map((order) => ({
-      id: `order:${order.id}`,
+      id: order.id,
       units: order.quantity,
       designs: (
         order.items?.length

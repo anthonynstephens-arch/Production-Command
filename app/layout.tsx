@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./dashboard-polish.css";
 import "./gradient-able-marsh.css";
+import "./workspace.css";
 
 export const metadata: Metadata = {
   title: "Marsh Supply | Production Command",

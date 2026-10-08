@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getPortalSession } from "@/lib/auth";
+import { isAnthony } from "@/lib/portal-permissions";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { lookupInboundTracking } from "@/lib/inbound-tracking";
 
@@ -99,10 +100,10 @@ export async function PATCH(request: Request) {
     const status = ["expected", "in_transit", "delivered"].includes(body.status) ? body.status : "expected";
     if(status === "delivered" && session.role !== "admin") return Response.json({error:"An admin must confirm that supplies were received."},{status:403});
     if(status === "delivered") {
-      const {data:applied,error}=await db.from("marsh_incoming_deliveries").update({status,delivered_at:new Date().toISOString(),inventory_applied:true}).eq("id",body.id).eq("inventory_applied",false).select("id,status,supply_type,quantity").maybeSingle();
-      if(error) return Response.json({error:"Could not receive delivery."},{status:500});
-      if(!applied) return Response.json({error:"This delivery was already received or could not be updated."},{status:409});
-      return Response.json({ok:true,delivery:applied,inventoryAddition:{key:applied.supply_type,quantity:Number(applied.quantity)}});
+      if (!uuid.test(String(body.id || ""))) return Response.json({error:"Invalid delivery reference."},{status:400});
+      const {data,error}=await db.rpc("receive_marsh_delivery",{p_id:body.id,p_actor:session.userId});
+      if(error) return Response.json({error:"Could not receive delivery. Inventory and receipt must save together; please retry."},{status:500});
+      return Response.json({ok:true,...data});
     }
     const { data:updated,error } = await db.from("marsh_incoming_deliveries").update({ status, delivered_at: null }).eq("id", body.id).eq("inventory_applied",false).select("id,status").maybeSingle();
     if (error) return Response.json({ error: "Could not update delivery." }, { status: 500 });
@@ -114,7 +115,7 @@ export async function PATCH(request: Request) {
     if(!item) return Response.json({error:"Delivery not found."},{status:404});
     const tracking=await lookupInboundTracking(item.tracking_number,item.carrier);
     const awaitingReceipt=tracking.status==="delivered"&&!item.inventory_applied;
-    const {error}=await db.from("marsh_incoming_deliveries").update({carrier:tracking.carrier,tracking_url:tracking.trackingUrl||null,tracking_provider:tracking.slug,eta_start:tracking.etaStart,eta_end:tracking.etaEnd,status:awaitingReceipt?"in_transit":tracking.status,tracking_message:awaitingReceipt?"Carrier shows delivered — awaiting receipt confirmation.":tracking.message,last_tracking_check:new Date().toISOString()}).eq("id",body.id);
+    const {error}=await db.from("marsh_incoming_deliveries").update({carrier:tracking.carrier,tracking_url:tracking.trackingUrl||null,tracking_provider:tracking.slug,eta_start:tracking.etaStart,eta_end:tracking.etaEnd,status:item.inventory_applied?"delivered":awaitingReceipt?"in_transit":tracking.status,tracking_message:awaitingReceipt?"Carrier shows delivered — awaiting receipt confirmation.":tracking.message,last_tracking_check:new Date().toISOString()}).eq("id",body.id);
     if(error) return Response.json({error:"Could not refresh tracking."},{status:500});
     return Response.json({ok:true});
   }
@@ -128,6 +129,9 @@ export async function DELETE(request: Request) {
   const body = await request.json().catch(() => ({}));
   const id = String(body.id || "");
   const type = String(body.type || "delivery");
+  if ((type === "payment" || type === "charge") && !isAnthony(session)) {
+    return Response.json({ error: "Only Anthony can delete ledger entries." }, { status: 403 });
+  }
   if (!id) return Response.json({ error: "Record ID is required." }, { status: 400 });
 
   const db = getSupabaseAdmin();

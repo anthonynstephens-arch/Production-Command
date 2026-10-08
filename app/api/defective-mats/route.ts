@@ -1,4 +1,5 @@
 import { getPortalSession } from "@/lib/auth";
+import { isAnthony } from "@/lib/portal-permissions";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
@@ -20,7 +21,7 @@ export async function GET() {
 export async function POST(request:Request) {
   const session = await getPortalSession();
   if (!session || session.mustChangePin) return Response.json({error:"Unauthorized"},{status:401});
-  if(session.role!=="admin") return Response.json({error:"Admin access required."},{status:403});
+  if(!isAnthony(session)) return Response.json({error:"Only Anthony can add defective mats."},{status:403});
   const body = await request.json().catch(()=>({}));
   if(!/^[0-9a-f-]{36}$/i.test(body.id||"") || !Number.isInteger(Number(body.quantity)) || Number(body.quantity)<1 || Number(body.quantity)>100000 || !String(body.reason||"").trim() || !/^\d{4}-\d{2}-\d{2}$/.test(body.receivedDate||"")) return Response.json({error:"Enter a quantity, received date, and defect description."},{status:400});
   const {data,error} = await getSupabaseAdmin().rpc("record_marsh_defective_mats",{

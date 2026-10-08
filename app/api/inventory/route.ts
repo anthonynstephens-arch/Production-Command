@@ -1,6 +1,9 @@
 import { getPortalSession } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+import { getShipStationOrders } from "@/lib/shipstation";
+import { syncMarshShipmentInventory } from "@/lib/marsh-shipment-inventory";
+
 const ACCOUNT_SLUG = "marsh-supply";
 
 const itemMap = {
@@ -18,7 +21,7 @@ type SupplyKey = keyof typeof itemMap;
 
 export async function GET() {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = getSupabaseAdmin();
   const { data, error } = await db
@@ -37,34 +40,18 @@ export async function GET() {
   return Response.json({ inventory });
 }
 
-export async function POST(request: Request) {
+export async function POST() {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-  const body = await request.json().catch(() => ({}));
-  const shipments = Array.isArray(body.shipments) ? body.shipments.slice(0, 500).map((shipment: unknown) => {
-    const record = shipment && typeof shipment === "object" ? shipment as Record<string, unknown> : {};
-    const designs = Array.isArray(record.designs) ? record.designs.slice(0, 20).map((design: unknown) => {
-      const item = design && typeof design === "object" ? design as Record<string, unknown> : {};
-      return { key: String(item.key || "").slice(0, 80), quantity: Math.max(0, Math.trunc(Number(item.quantity) || 0)) };
-    }).filter((design: { key: string; quantity: number }) => design.key && design.quantity > 0) : [];
-    return { id: String(record.id || "").slice(0, 160), units: Math.max(0, Math.trunc(Number(record.units) || 0)), designs };
-  }).filter((shipment: { id: string; units: number }) => shipment.id && shipment.units > 0) : [];
-
-  if (!shipments.length) return Response.json({ ok: true, processedShipments: 0, processedUnits: 0 });
-
-  const db = getSupabaseAdmin();
-  const { data, error } = await db.rpc("sync_marsh_shipment_inventory", {
-    p_account_slug: ACCOUNT_SLUG,
-    p_shipments: shipments,
-  });
-  if (error) return Response.json({ error: "Could not apply shipment inventory usage." }, { status: 500 });
-  return Response.json({ ok: true, ...data });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await getShipStationOrders();
+  if (!result.connected) return Response.json({ error: "ShipStation is unavailable. Inventory was not changed." }, { status: 503 });
+  const sync = await syncMarshShipmentInventory(result.orders);
+  return Response.json(sync, { status: sync.ok ? 200 : 500 });
 }
 
 export async function PATCH(request: Request) {
   const session = await getPortalSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || session.mustChangePin) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (session.role !== "admin") return Response.json({ error: "Admin access required." }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
