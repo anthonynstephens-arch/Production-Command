@@ -1112,7 +1112,7 @@ export default function Dashboard({
               >
                 <option value="all">All undelivered orders</option>
                 <option value="pending">Pending orders</option><option value="ready">Ready from printed stock</option><option value="to-print">Needs printing</option><option value="held">On hold</option>
-                <option value="shipped">In transit</option>
+                <option value="shipped">Orders in Transit</option>
                 <option value="delivered">Delivered</option>
               </select>
             </div>
@@ -1134,7 +1134,7 @@ export default function Dashboard({
                 {(["pending", "shipped", "delivered"] as const).map(group => {
                 const groupOrders = filtered.filter(order => order.status === group);
                 if (group === "delivered" && filter !== "delivered") return null;
-                return <Fragment key={group}><tr className="shipment-section-heading"><td colSpan={7}><strong>{group === "pending" ? "Pending orders" : group === "shipped" ? "In transit" : "Delivered"}</strong><span>{groupOrders.length} orders</span></td></tr>
+                return <Fragment key={group}><tr className="shipment-section-heading"><td colSpan={7}><strong>{group === "pending" ? "Pending orders" : group === "shipped" ? "Orders in Transit" : "Delivered"}</strong><span>{groupOrders.length} orders</span></td></tr>
                 {groupOrders.length === 0 && <tr><td colSpan={7} className="muted">No {group === "shipped" ? "in-transit" : group} orders match this view.</td></tr>}
                 {groupOrders.map((order) => {
                   const expanded = expandedOrderIds.has(order.id);
