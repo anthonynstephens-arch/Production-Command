@@ -762,6 +762,10 @@ export default function Dashboard({
       return 0;
     });
 
+  const detroitDay = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Detroit", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  const todayInDetroit = detroitDay(new Date().toISOString());
+  const deliveredToday = orders.filter(order => order.status === "delivered" && order.tracking?.deliveredAt && Number.isFinite(Date.parse(order.tracking.deliveredAt)) && detroitDay(order.tracking.deliveredAt) === todayInDetroit).length;
+
   return (
     <main className="dashboard">
       <header className="topbar">
@@ -1116,6 +1120,11 @@ export default function Dashboard({
                 <option value="delivered">Delivered</option>
               </select>
             </div>
+          </div>
+          <div className="order-summary-tiles" aria-label="Order summary">
+            <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
+            <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
+            <article className="order-summary-tile delivered"><PackageCheck size={20} aria-hidden="true"/><div><span>Orders Delivered Today</span><strong>{deliveredToday}</strong><small>Confirmed delivery · Detroit time</small></div></article>
           </div>
           <div className="table-wrap">
             <table>

@@ -42,3 +42,13 @@
 .dashboard .shipment-tracking ol { max-height:320px; overflow:auto; padding-left:20px; }
 .dashboard .shipment-tracking li { margin:12px 0; }
 .dashboard .shipment-tracking li span,.dashboard .shipment-tracking li small { display:block; }
+
+.dashboard .order-summary-tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:0 20px 20px; }
+.dashboard .order-summary-tile { display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid #e0e8f0; border-radius:12px; background:#f7faff; color:#245d96; }
+.dashboard .order-summary-tile.pending { background:#fffaf1; color:#a86412; }
+.dashboard .order-summary-tile.delivered { background:#f1faf5; color:#26724c; }
+.dashboard .order-summary-tile div { display:flex; flex-direction:column; gap:4px; }
+.dashboard .order-summary-tile span { font-size:13px; font-weight:600; }
+.dashboard .order-summary-tile strong { font-size:26px; line-height:1.1; }
+.dashboard .order-summary-tile small { font-size:11px; color:#617469; }
+@media(max-width:600px) { .dashboard .order-summary-tiles { gap:8px; padding:0 12px 16px; } .dashboard .order-summary-tile { padding:10px; flex-direction:column; align-items:flex-start; gap:8px; } .dashboard .order-summary-tile span { font-size:11px; } .dashboard .order-summary-tile strong { font-size:23px; } }

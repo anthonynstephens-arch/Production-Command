@@ -3,10 +3,10 @@ import type { PortalOrder } from "./shipstation";
 export type ShipmentTracking = {
   status: string; location: string | null; message: string;
   etaStart: string | null; etaEnd: string | null; etaSource: string | null;
-  lastEventAt: string | null; checkedAt: string;
+  lastEventAt: string | null; deliveredAt: string | null; checkedAt: string;
   events: Array<{ time: string | null; location: string | null; description: string }>;
 };
-type Event = { time_iso?: string; time_utc?: string; location?: string; description?: string; description_translation?: { description?: string }; address?: { city?: string; state?: string; country?: string } };
+type Event = { time_iso?: string; time_utc?: string; location?: string; description?: string; stage?: string; description_translation?: { description?: string }; address?: { city?: string; state?: string; country?: string } };
 type TrackingRow = { number?: string; package_status?: string; track_info?: {
   latest_status?: { status?: string; sub_status_descr?: string };
   latest_event?: Event;
@@ -33,19 +33,20 @@ export function normalizeTracking(row: TrackingRow): ShipmentTracking {
     .sort((a,b) => (Date.parse(b.time_iso || b.time_utc || "") || 0) - (Date.parse(a.time_iso || a.time_utc || "") || 0));
   const latest = info?.latest_event || events[0];
   const eta = info?.time_metrics?.estimated_delivery_date;
+  const deliveredEvent = events.find(event => event.stage?.toLowerCase() === "delivered") || ((info?.latest_status?.status || row.package_status)?.toLowerCase() === "delivered" ? latest : undefined);
   return {
     status: info?.latest_status?.status || row.package_status || "NotFound",
     location: location(latest),
     message: latest?.description_translation?.description || latest?.description || info?.latest_status?.sub_status_descr || "Awaiting carrier update",
     etaStart: eta?.from || null, etaEnd: eta?.to || null, etaSource: eta?.source || null,
-    lastEventAt: latest?.time_iso || latest?.time_utc || null, checkedAt: new Date().toISOString(),
+    lastEventAt: latest?.time_iso || latest?.time_utc || null, deliveredAt: deliveredEvent?.time_iso || deliveredEvent?.time_utc || null, checkedAt: new Date().toISOString(),
     events: events.map(event => ({ time: event.time_iso || event.time_utc || null, location: location(event), description: event.description_translation?.description || event.description || "Carrier update" })),
   };
 }
 /** Query registered numbers without per-refresh realtime charges. */
 export async function apply17TrackDelivery(orders: PortalOrder[]): Promise<PortalOrder[]> {
   const key = process.env.TRACK17_API_KEY;
-  const eligible = orders.filter(order => order.status !== "delivered" && order.trackingNumber);
+  const eligible = orders.filter(order => order.trackingNumber && (order.status !== "delivered" || Date.parse(order.shipDate || "") > Date.now() - 7 * 86400000));
   const numbers = [...new Set(eligible.map(order => cleanNumber(order.trackingNumber!)))];
   const results = new Map<string, ShipmentTracking>();
   const errors = new Set<string>();
@@ -62,10 +63,10 @@ export async function apply17TrackDelivery(orders: PortalOrder[]): Promise<Porta
     } catch { batch.forEach(number => errors.add(number)); }
   }
   return orders.map(order => {
-    if (order.status === "delivered" || !order.trackingNumber) return order;
+    if (!order.trackingNumber || !numbers.includes(cleanNumber(order.trackingNumber))) return order;
     const number = cleanNumber(order.trackingNumber);
     const tracking = results.get(number);
-    return { ...order, status: tracking?.status.toLowerCase() === "delivered" ? "delivered" : ["intransit", "outfordelivery", "availableforpickup"].includes(tracking?.status.toLowerCase() || "") ? "shipped" : order.status,
+    return { ...order, status: order.status === "delivered" || tracking?.status.toLowerCase() === "delivered" ? "delivered" : ["intransit", "outfordelivery", "availableforpickup"].includes(tracking?.status.toLowerCase() || "") ? "shipped" : order.status,
       tracking, trackingError: !key ? "17TRACK is not configured" : errors.has(number) ? "Tracking temporarily unavailable; try syncing again" : !tracking ? "Awaiting first carrier update" : undefined };
   });
 }
