@@ -31,3 +31,14 @@
 @media(max-width:800px){.dashboard .workspace-header{flex-direction:column;gap:16px}.dashboard .workspace-header .sync-button{width:auto}.dashboard .workspace-mobile-select{display:grid;gap:8px;margin-bottom:22px;font-size:.8rem;font-weight:750;color:var(--muted)}.dashboard .workspace-mobile-select select{width:100%;padding:12px;border:1px solid #b8cbc0;border-radius:9px;background:#fff;color:#17382d;font-size:1rem}.dashboard .metrics-grid{grid-template-columns:1fr 1fr}.dashboard .metrics-grid .metric{padding:16px}.dashboard .record-row{align-items:flex-start;flex-wrap:wrap}.dashboard .overview-shortcuts{gap:12px}}
 @media(max-width:480px){.dashboard .metrics-grid{grid-template-columns:1fr}.dashboard .metrics-grid .metric{min-height:100px}.dashboard .history-button{width:100%}.dashboard .operations-panel{padding:16px}}
 @media(prefers-reduced-motion:reduce){.dashboard *{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+
+.dashboard .shipment-section-heading td { background:#edf4fb; padding:18px 20px; color:#183751; }
+.dashboard .shipment-section-heading strong { font-size:18px; }
+.dashboard .shipment-section-heading span { margin-left:16px; color:#516577; }
+.dashboard .shipment-tracking { display:flex; flex-direction:column; gap:7px; min-width:240px; max-width:380px; white-space:normal; font-size:13px; line-height:1.5; }
+.dashboard .shipment-tracking a { color:#176cba; overflow-wrap:anywhere; }
+.dashboard .shipment-tracking small { color:#576b7d; }
+.dashboard .shipment-tracking summary { color:#176cba; cursor:pointer; }
+.dashboard .shipment-tracking ol { max-height:320px; overflow:auto; padding-left:20px; }
+.dashboard .shipment-tracking li { margin:12px 0; }
+.dashboard .shipment-tracking li span,.dashboard .shipment-tracking li small { display:block; }

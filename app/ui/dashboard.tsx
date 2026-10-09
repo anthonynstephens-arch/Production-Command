@@ -47,6 +47,7 @@ import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
 import ProductionPlan from "./production-plan";
 import OperationalCharts from "./operational-charts";
+import ShipmentTrackingDetails from "./shipment-tracking";
 
 type Supply = {
   mats: number;
@@ -313,7 +314,7 @@ export default function Dashboard({
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState("");
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "ready" | "held" | "to-print" | PortalOrder["status"]>("pending");
+  const [filter, setFilter] = useState<"all" | "ready" | "held" | "to-print" | PortalOrder["status"]>("all");
   const [view, setView] = useState<"admin" | "marsh">(
     session.role === "admin" ? "admin" : "marsh",
   );
@@ -747,7 +748,7 @@ export default function Dashboard({
   const filtered = orders
     .filter(
       (order) =>
-        (filter === "all" || order.status === filter || (filter === "ready" && matAvailability.readyOrderIds.has(order.id) && !heldOrderIds.has(order.id)) || (filter === "held" && heldOrderIds.has(order.id)) || (filter === "to-print" && (matAvailability.allocations.get(order.id)?.toPrint ?? 0)>0)) &&
+        ((filter === "all" && order.status !== "delivered") || order.status === filter || (filter === "ready" && matAvailability.readyOrderIds.has(order.id) && !heldOrderIds.has(order.id)) || (filter === "held" && heldOrderIds.has(order.id)) || (filter === "to-print" && (matAvailability.allocations.get(order.id)?.toPrint ?? 0)>0)) &&
         `${order.orderNumber} ${order.customer} ${order.item} ${order.items?.map((item) => item.name).join(" ") ?? ""}`
           .toLowerCase()
           .includes(query.trim().toLowerCase()),
@@ -1109,9 +1110,9 @@ export default function Dashboard({
                 value={filter}
                 onChange={(e) => setFilter(e.target.value as typeof filter)}
               >
-                <option value="all">All statuses</option>
+                <option value="all">All undelivered orders</option>
                 <option value="pending">Pending orders</option><option value="ready">Ready from printed stock</option><option value="to-print">Needs printing</option><option value="held">On hold</option>
-                <option value="shipped">Shipped</option>
+                <option value="shipped">In transit</option>
                 <option value="delivered">Delivered</option>
               </select>
             </div>
@@ -1130,7 +1131,12 @@ export default function Dashboard({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((order) => {
+                {(["pending", "shipped", "delivered"] as const).map(group => {
+                const groupOrders = filtered.filter(order => order.status === group);
+                if (group === "delivered" && filter !== "delivered") return null;
+                return <Fragment key={group}><tr className="shipment-section-heading"><td colSpan={7}><strong>{group === "pending" ? "Pending orders" : group === "shipped" ? "In transit" : "Delivered"}</strong><span>{groupOrders.length} orders</span></td></tr>
+                {groupOrders.length === 0 && <tr><td colSpan={7} className="muted">No {group === "shipped" ? "in-transit" : group} orders match this view.</td></tr>}
+                {groupOrders.map((order) => {
                   const expanded = expandedOrderIds.has(order.id);
                   const lineItems = order.items?.length
                     ? order.items
@@ -1197,14 +1203,7 @@ export default function Dashboard({
                           )}
                         </td>
                         <td data-label="Tracking">
-                          {order.trackingNumber ? (
-                            <span className="tracking">
-                              {order.carrier}
-                              <ExternalLink size={13} />
-                            </span>
-                          ) : (
-                            <span className="muted">Not assigned</span>
-                          )}
+                          {order.trackingNumber ? <ShipmentTrackingDetails order={order} /> : <span className="muted">Not assigned · awaiting shipment</span>}
                         </td>
                         <td data-label="Date">
                           {new Intl.DateTimeFormat("en-US", {
@@ -1375,6 +1374,7 @@ export default function Dashboard({
                       )}
                     </Fragment>
                   );
+                })}</Fragment>;
                 })}
               </tbody>
             </table>

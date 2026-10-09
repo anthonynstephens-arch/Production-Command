@@ -1,4 +1,4 @@
-import { apply17TrackDelivery } from "./tracking17";
+import { apply17TrackDelivery, type ShipmentTracking } from "./tracking17";
 
 export type PortalOrder = {
   id: string;
@@ -10,6 +10,8 @@ export type PortalOrder = {
   orderDate: string;
   shipDate?: string;
   trackingNumber?: string;
+  tracking?: ShipmentTracking;
+  trackingError?: string;
   shipmentId?: string;
   carrier?: string;
   service?: string;
@@ -111,6 +113,20 @@ function normalizeStatus(value?: string, _shipDate?: string, trackingNumber?: st
   return "pending";
 }
 
+async function fetchAllPages<T>(url: string, field: string, headers: Record<string, string>, pageParam: string): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 1; ; page++) {
+    const response = await fetch(`${url}&${pageParam}=${page}`, { headers, cache: "no-store", signal: AbortSignal.timeout(12000) });
+    if (!response.ok) throw new Error(`ShipStation ${field} request failed (${response.status})`);
+    const payload = await response.json() as Record<string, unknown>;
+    const items = (payload[field] ?? []) as T[];
+    rows.push(...items);
+    const pages = Number(payload.pages ?? payload.total_pages ?? 0);
+    if ((pages && page >= pages) || !items.length || (!pages && items.length < Number(new URL(url).searchParams.get("pageSize") || new URL(url).searchParams.get("page_size")))) break;
+  }
+  return rows;
+}
+
 export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; connected: boolean; message?: string }> {
   const apiKey = process.env.SHIPSTATION_API_KEY;
   const apiSecret = process.env.SHIPSTATION_API_SECRET;
@@ -123,16 +139,12 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
     // every result appear shipped.
     if (apiSecret) {
       const headers = { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, Accept: "application/json" };
-      const [legacy, shipmentResponse] = await Promise.all([fetch("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", {
-        headers,
-        cache: "no-store", signal: AbortSignal.timeout(12000),
-      }), fetch("https://ssapi.shipstation.com/shipments?pageSize=500&sortBy=ShipDate&sortDir=DESC", {
-        headers,
-        cache: "no-store", signal: AbortSignal.timeout(12000),
-      }).catch(() => null)]);
-      if (!legacy.ok) throw new Error(`ShipStation authentication failed (${legacy.status}).`);
-      const payload = await legacy.json() as { orders?: LegacyShipStationOrder[] };
-      const shipmentPayload = shipmentResponse?.ok ? await shipmentResponse.json() as { shipments?: LegacyShipStationShipment[] } : { shipments: [] };
+      const [allOrders, allShipments] = await Promise.all([
+        fetchAllPages<LegacyShipStationOrder>("https://ssapi.shipstation.com/orders?pageSize=100&sortBy=OrderDate&sortDir=DESC", "orders", headers, "page"),
+        fetchAllPages<LegacyShipStationShipment>("https://ssapi.shipstation.com/shipments?pageSize=500&sortBy=ShipDate&sortDir=DESC", "shipments", headers, "page"),
+      ]);
+      const payload = { orders: allOrders };
+      const shipmentPayload = { shipments: allShipments };
       const shipmentsByOrder = new Map<string, LegacyShipStationShipment>();
       for (const shipment of shipmentPayload.shipments ?? []) {
         if (shipment.voided) continue;
@@ -158,21 +170,13 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
     }
 
     const headers = { "api-key": apiKey, Accept: "application/json" };
-    const [response, shipmentResponse] = await Promise.all([
-      fetch("https://api.shipstation.com/v2/orders?page_size=100&sort_dir=desc", {
-        headers,
-        cache: "no-store", signal: AbortSignal.timeout(12000),
-      }),
-      fetch("https://api.shipstation.com/v2/shipments?page_size=100&sort_dir=desc&sort_by=created_at", {
-        headers,
-        cache: "no-store", signal: AbortSignal.timeout(12000),
-      }).catch(() => null),
+    const [allOrders, allShipments] = await Promise.all([
+      fetchAllPages<ShipStationOrder>("https://api.shipstation.com/v2/orders?page_size=100&sort_dir=desc", "orders", headers, "page"),
+      fetchAllPages<ShipStationV2Shipment>("https://api.shipstation.com/v2/shipments?page_size=100&sort_dir=desc&sort_by=created_at", "shipments", headers, "page"),
     ]);
-    if (response.ok) {
-      const payload = await response.json() as { orders?: ShipStationOrder[] };
-      const shipmentPayload = shipmentResponse?.ok
-        ? await shipmentResponse.json() as { shipments?: ShipStationV2Shipment[] }
-        : { shipments: [] };
+    {
+      const payload = { orders: allOrders };
+      const shipmentPayload = { shipments: allShipments };
       const shipmentsByOrder = new Map<string, ShipStationV2Shipment>();
       for (const shipment of shipmentPayload.shipments ?? []) {
         if (shipment.external_order_id && !shipmentsByOrder.has(`external:${shipment.external_order_id}`)) {
@@ -215,7 +219,6 @@ export async function getShipStationOrders(): Promise<{ orders: PortalOrder[]; c
       });
       return { orders: await apply17TrackDelivery(orders), connected: true, message: "Connected to ShipStation orders and shipments." };
     }
-    throw new Error(`ShipStation API returned ${response.status}.`);
   } catch (error) {
     return { orders: [], connected: false, message: error instanceof Error ? error.message : "ShipStation sync unavailable" };
   }
