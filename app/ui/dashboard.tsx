@@ -906,6 +906,11 @@ export default function Dashboard({
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
         <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
+          <div className="order-summary-tiles" aria-label="Order summary">
+            <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
+            <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
+            <article className="order-summary-tile delivered"><PackageCheck size={20} aria-hidden="true"/><div><span>Orders Delivered Today</span><strong>{deliveredToday}</strong><small>Confirmed delivery · Detroit time</small></div></article>
+          </div>
         <section className="overview-summary" id="overview">
           <div className="overview-topline">
             <p className="kicker">AT A GLANCE</p>
@@ -1120,11 +1125,6 @@ export default function Dashboard({
                 <option value="delivered">Delivered</option>
               </select>
             </div>
-          </div>
-          <div className="order-summary-tiles" aria-label="Order summary">
-            <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
-            <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
-            <article className="order-summary-tile delivered"><PackageCheck size={20} aria-hidden="true"/><div><span>Orders Delivered Today</span><strong>{deliveredToday}</strong><small>Confirmed delivery · Detroit time</small></div></article>
           </div>
           <div className="table-wrap">
             <table>
