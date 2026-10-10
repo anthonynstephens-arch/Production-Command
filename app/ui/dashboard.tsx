@@ -1009,11 +1009,35 @@ export default function Dashboard({
               <span className="metric-icon amber">
                 <PackageOpen size={23} />
               </span>
-              <p>Orders awaiting production</p>
+              <p>Orders awaiting fulfillment</p>
             </div>
             <div className="metric-value">
-              <strong>{ordersAwaitingProduction}</strong>
-              <small title={awaitingMats.min !== awaitingMats.max ? "Production is tracked as an order count, not specific orders. The range reflects the possible mat quantity across the orders awaiting production." : undefined}>{awaitingMats.label}</small>
+              <strong>{counts.pending}</strong>
+              <small>{orders.filter(order => order.status === "pending").reduce((total, order) => total + order.quantity, 0)} mats total</small>
+            </div>
+          </article>
+          <article className="metric">
+            <div className="metric-heading">
+              <span className="metric-icon blue">
+                <Truck size={23} />
+              </span>
+              <p>Orders in transit</p>
+            </div>
+            <div className="metric-value">
+              <strong>{counts.shipped}</strong>
+              <small>In carrier network</small>
+            </div>
+          </article>
+          <article className="metric">
+            <div className="metric-heading">
+              <span className="metric-icon green">
+                <PackageCheck size={23} />
+              </span>
+              <p>Orders delivered</p>
+            </div>
+            <div className="metric-value">
+              <strong>{counts.delivered}</strong>
+              <small>Successfully completed</small>
             </div>
           </article>
           <article className="metric production-metric">
@@ -1021,14 +1045,16 @@ export default function Dashboard({
               <span className="metric-icon violet">
                 <Factory size={23} />
               </span>
-              <p>Orders in production</p>
+              <p>Orders not covered by printed stock</p>
             </div>
             <div className="metric-value">
-              <strong>{Math.min(ordersInProduction,Math.max(0,counts.pending-matAvailability.readyOrderIds.size))}</strong>
-              <small>Currently being produced</small>
+              <strong>{Math.max(0, counts.pending - matAvailability.readyOrderIds.size)}</strong>
+              <small>Require printing before fulfillment</small>
               {session.role === "admin" && view === "admin" && (
                 <div className="production-adjust">
+                  <label htmlFor="pipeline-production-count">Currently in production</label>
                   <input
+                    id="pipeline-production-count"
                     aria-label="Orders currently in production"
                     type="number"
                     min="0"
@@ -1046,30 +1072,6 @@ export default function Dashboard({
                   </button>
                 </div>
               )}
-            </div>
-          </article>
-          <article className="metric">
-            <div className="metric-heading">
-              <span className="metric-icon blue">
-                <Truck size={23} />
-              </span>
-              <p>Orders shipped</p>
-            </div>
-            <div className="metric-value">
-              <strong>{counts.shipped}</strong>
-              <small>In carrier network</small>
-            </div>
-          </article>
-          <article className="metric">
-            <div className="metric-heading">
-              <span className="metric-icon green">
-                <PackageCheck size={23} />
-              </span>
-              <p>Orders delivered</p>
-            </div>
-            <div className="metric-value">
-              <strong>{counts.delivered}</strong>
-              <small>Successfully completed</small>
             </div>
           </article>
           <article className="metric">
