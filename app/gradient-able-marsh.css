@@ -85,20 +85,20 @@
   box-shadow: 0 4px 12px rgba(47, 101, 185, .13);
 }
 .dashboard .metrics-grid .metric:nth-child(1) { background: linear-gradient(120deg, #ffd485, #ffb45b); }
-.dashboard .metrics-grid .metric:nth-child(2) { background: linear-gradient(120deg, #765fbd, #5944a3); }
-.dashboard .metrics-grid .metric:nth-child(3) { background: linear-gradient(120deg, #3075d0, #2259b4); }
-.dashboard .metrics-grid .metric:nth-child(4) { background: linear-gradient(120deg, #55dcba, #28baa1); }
+.dashboard .metrics-grid .metric:nth-child(4) { background: linear-gradient(120deg, #765fbd, #5944a3); }
+.dashboard .metrics-grid .metric:nth-child(2) { background: linear-gradient(120deg, #3075d0, #2259b4); }
+.dashboard .metrics-grid .metric:nth-child(3) { background: linear-gradient(120deg, #55dcba, #28baa1); }
 .dashboard .metrics-grid .metric:nth-child(5) { background: linear-gradient(120deg, #5277d1, #3c5aba); }
 .dashboard .metrics-grid .metric:nth-child(6) { background: linear-gradient(120deg, #c84062, #a82346); }
 .dashboard .metrics-grid .metric p,
 .dashboard .metrics-grid .metric strong,
 .dashboard .metrics-grid .metric small { color: #172d47; }
+.dashboard .metrics-grid .metric:nth-child(4) p,
+.dashboard .metrics-grid .metric:nth-child(4) strong,
+.dashboard .metrics-grid .metric:nth-child(4) small,
 .dashboard .metrics-grid .metric:nth-child(2) p,
 .dashboard .metrics-grid .metric:nth-child(2) strong,
 .dashboard .metrics-grid .metric:nth-child(2) small,
-.dashboard .metrics-grid .metric:nth-child(3) p,
-.dashboard .metrics-grid .metric:nth-child(3) strong,
-.dashboard .metrics-grid .metric:nth-child(3) small,
 .dashboard .metrics-grid .metric:nth-child(5) p,
 .dashboard .metrics-grid .metric:nth-child(5) strong,
 .dashboard .metrics-grid .metric:nth-child(5) small,
@@ -118,7 +118,7 @@
 .dashboard .metric .metric-icon { width: 42px; height: 42px; flex-basis: 42px; }
 .dashboard .metric .metric-icon svg { width: 23px; height: 23px; }
 .dashboard .metric:nth-child(1) .metric-icon,
-.dashboard .metric:nth-child(4) .metric-icon { color: #17364b; }
+.dashboard .metric:nth-child(3) .metric-icon { color: #17364b; }
 .dashboard .metric .production-adjust input { color: #27364b; background: #fff; }
 .dashboard .metric .production-adjust button { color: #2b5eac; background: #fff; }
 .dashboard .analytics-row { display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; margin-top: 18px; }
@@ -204,9 +204,9 @@
 .dashboard .availability-track .purple { background: linear-gradient(90deg, #a288ea, #755bbb); }
 .dashboard .availability-note { margin: 22px 0 0; color: #6d7b8c; font-size: .79rem; line-height: 1.4; }
 .dashboard .metrics-grid .metric { transition: transform .25s ease, box-shadow .25s ease; animation: marsh-card-enter .55s both; }
-.dashboard .metrics-grid .metric:nth-child(2) { animation-delay: .06s; }
-.dashboard .metrics-grid .metric:nth-child(3) { animation-delay: .12s; }
-.dashboard .metrics-grid .metric:nth-child(4) { animation-delay: .18s; }
+.dashboard .metrics-grid .metric:nth-child(4) { animation-delay: .06s; }
+.dashboard .metrics-grid .metric:nth-child(2) { animation-delay: .12s; }
+.dashboard .metrics-grid .metric:nth-child(3) { animation-delay: .18s; }
 .dashboard .metrics-grid .metric:nth-child(5) { animation-delay: .24s; }
 .dashboard .metrics-grid .metric:nth-child(6) { animation-delay: .3s; }
 .dashboard .metrics-grid .metric:hover { transform: translateY(-4px); box-shadow: 0 13px 25px rgba(35, 61, 117, .18); }
@@ -281,7 +281,7 @@
 .compact-production-plan .run-stage-list button:disabled{cursor:default;opacity:1}
 .compact-production-plan .run-stage-list button:not(:disabled){cursor:pointer;border-color:#6393e5;background:#f0f5ff}
 .compact-production-plan .run-stage-list .active button{border-color:#6590df;background:#e7efff;color:#234f9c}
-.compact-production-plan .run-stage-list .active:nth-child(2) button{border-color:#e6bc68;background:#fff2d8;color:#744600}
+.compact-production-plan .run-stage-list .active:nth-child(4) button{border-color:#e6bc68;background:#fff2d8;color:#744600}
 .compact-production-plan .run-stage-list .done button{border-color:#99cbb3;background:#e7f5ee;color:#23694b}
 .run-stage-number{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font-size:13px;font-weight:700;background:#e0e7f1}
 .run-stage-list .done .run-stage-number{background:#28744f;color:#fff}
