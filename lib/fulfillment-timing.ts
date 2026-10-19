@@ -1,6 +1,8 @@
 import type { PortalOrder } from "./shipstation";
 
 const DAY = 86400000;
+// Fixed start: October 4, 2026 at midnight in Detroit (not a rolling window).
+const FULFILLMENT_START = Date.parse("2026-10-04T00:00:00-04:00");
 type TimingSample = { days: number | null; count: number };
 
 /** Elapsed calendar days per order, excluding missing, future or reversed milestones. */
@@ -21,7 +23,7 @@ export function fulfillmentTiming(orders: PortalOrder[], now: number) {
     }
     const shipped = Date.parse(order.shipDate ?? "");
     const shipDays = elapsed(ordered, shipped);
-    if (shipDays !== null) fulfillment.push(shipDays);
+    if (shipDays !== null && ordered >= FULFILLMENT_START) fulfillment.push(shipDays);
     if (order.status !== "delivered") continue;
     // Never substitute an ETA, last scan or sync timestamp for actual delivery.
     const delivered = Date.parse(order.tracking?.deliveredAt ?? "");

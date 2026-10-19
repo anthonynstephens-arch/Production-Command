@@ -15,7 +15,7 @@ export default function FulfillmentGauges({ orders }: { orders: PortalOrder[] })
   }, []);
   const timing = fulfillmentTiming(orders, now ?? 0);
   const gauges = [
-    { key: "fulfillment", label: "Order → fulfillment", sample: timing.fulfillment, color: "#087f5b", note: "Order placed to recorded ship date" },
+    { key: "fulfillment", label: "Order → fulfillment", sample: timing.fulfillment, color: "#087f5b", note: "Orders placed since Oct 4, 2026 · to ship date" },
     { key: "delivery", label: "Order → delivery", sample: timing.delivery, color: "#347bd4", note: "Order placed to confirmed delivery" },
     { key: "transit", label: "Carrier transit", sample: timing.transit, color: "#7960b5", note: "Ship date to confirmed delivery" },
     { key: "pending", label: "Pending order age", sample: timing.pending, color: "#b77a20", note: timing.oldestPending === null ? "Current orders awaiting fulfillment" : `Oldest pending: ${formatDays(timing.oldestPending)} days` },

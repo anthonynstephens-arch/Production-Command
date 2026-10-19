@@ -33,3 +33,13 @@ test('delivery can use confirmed dates without a ship date and true same-day dur
  assert.equal(result.delivery.days,2.5);assert.equal(result.delivery.count,2);
  assert.equal(result.transit.days,0);assert.equal(result.transit.count,1);
 });
+test('fulfillment starts with orders placed on Oct 4 Detroit time while other gauges retain their history',()=>{
+ const before={...base,orderDate:'2026-10-04T03:59:59Z',shipDate:'2026-10-10T04:00:00Z'};
+ const atStart={...base,orderDate:'2026-10-04T04:00:00Z',shipDate:'2026-10-06T04:00:00Z'};
+ const later={...base,orderDate:'2026-10-15T04:00:00Z',shipDate:'2026-10-16T04:00:00Z',tracking:{deliveredAt:'2026-10-17T04:00:00Z'}};
+ const result=fulfillmentTiming([before,atStart,later],now);
+ assert.equal(result.fulfillment.count,2);assert.equal(result.fulfillment.days,1.5);
+ assert.equal(result.delivery.count,3);assert.equal(result.transit.count,3);
+ const laterNow=Date.parse('2026-11-18T12:00:00Z');
+ assert.equal(fulfillmentTiming([atStart],laterNow).fulfillment.count,1);
+});
