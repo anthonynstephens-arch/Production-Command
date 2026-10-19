@@ -47,6 +47,7 @@ import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
 import ProductionPlan from "./production-plan";
 import OperationalCharts from "./operational-charts";
+import FulfillmentGauges from "./fulfillment-gauges";
 import ShipmentTrackingDetails from "./shipment-tracking";
 
 type Supply = {
@@ -963,6 +964,7 @@ export default function Dashboard({
           </div>
         </section>
 
+        <FulfillmentGauges orders={orders} />
         <div className="overview-shortcuts"><a href="#order-queue"><PackageCheck size={22}/><strong>Work the order queue</strong><span>{pipelineOrders} pending · {matAvailability.readyOrderIds.size} covered by printed stock</span></a><a href="#production-runs"><Factory size={22}/><strong>Manage production runs</strong><span>Schedule, track, and reconcile each batch</span></a><a href="#operations"><CreditCard size={22}/><strong>Review the account</strong><span>Payments, credits, and incoming deliveries</span></a></div>
         <section className="insights-row cadence-only">
           <article className="panel cadence-panel">
