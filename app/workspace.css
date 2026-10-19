@@ -52,3 +52,110 @@
 .dashboard .order-summary-tile strong { font-size:26px; line-height:1.1; }
 .dashboard .order-summary-tile small { font-size:11px; color:#617469; }
 @media(max-width:600px) { .dashboard .order-summary-tiles { gap:8px; padding:0 12px 16px; } .dashboard .order-summary-tile { padding:10px; flex-direction:column; align-items:flex-start; gap:8px; } .dashboard .order-summary-tile span { font-size:11px; } .dashboard .order-summary-tile strong { font-size:23px; } }
+
+/* Compact fulfillment cards: reset the desktop table width and keep every
+   status child in the value column, including allocation and issue messages. */
+@media (max-width:700px) {
+  .dashboard .orders-panel .table-wrap { padding:0 8px 8px; }
+  .dashboard .orders-panel table { min-width:0; table-layout:fixed; }
+  .dashboard .orders-panel .order-row {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:0 12px;
+    width:100%;
+    margin:8px 0;
+    padding:8px 10px;
+    box-sizing:border-box;
+    background:#fff;
+  }
+  .dashboard .orders-panel .order-row > td {
+    grid-column:1 / -1;
+    width:auto;
+    min-width:0;
+    max-width:none;
+    padding:4px 0;
+    grid-template-columns:58px minmax(0,1fr);
+    gap:6px;
+    font-size:.8125rem;
+    line-height:1.35;
+    overflow-wrap:anywhere;
+  }
+  .dashboard .orders-panel .order-row > td::before {
+    font-size:.625rem;
+    line-height:1.75;
+  }
+  .dashboard .orders-panel .order-row > td[data-label="Order"] {
+    grid-column:1;
+    grid-row:1;
+    display:block;
+    border:0;
+  }
+  .dashboard .orders-panel .order-row > td[data-label="Date"] {
+    grid-column:2;
+    grid-row:1;
+    display:block;
+    border:0;
+    color:#697c74;
+    white-space:nowrap;
+  }
+  .dashboard .orders-panel .order-row > td:is([data-label="Order"],[data-label="Date"])::before { display:none; }
+  .dashboard .orders-panel .order-expand {
+    min-height:32px;
+    max-width:100%;
+    text-align:left;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .dashboard .orders-panel .order-row > td:first-child strong { font-size:.8125rem; }
+  .dashboard .orders-panel .order-expand svg { flex-shrink:0; }
+  .dashboard .orders-panel td[data-label="Status"]::before { grid-row:1; }
+  .dashboard .orders-panel td[data-label="Status"] > * { grid-column:2; min-width:0; max-width:100%; }
+  .dashboard .orders-panel .stock-allocation {
+    margin:0;
+    font-size:inherit;
+    line-height:inherit;
+    white-space:normal;
+  }
+  .dashboard .orders-panel .status {
+    justify-self:start;
+    width:max-content;
+    box-sizing:border-box;
+    padding:3px 8px;
+    font-size:.75rem;
+    line-height:1.25;
+    white-space:nowrap;
+    overflow-wrap:normal;
+  }
+  .dashboard .orders-panel .status i { flex-shrink:0; }
+  .dashboard .orders-panel .mat-shortage-pill {
+    justify-self:start;
+    width:fit-content;
+    white-space:normal;
+    font-size:.75rem;
+    line-height:1.35;
+  }
+  .dashboard .orders-panel .shipment-tracking {
+    min-width:0;
+    max-width:100%;
+    gap:3px;
+    font-size:inherit;
+    line-height:inherit;
+  }
+  .dashboard .orders-panel .shipment-tracking small { font-size:inherit; }
+  .dashboard .orders-panel .shipment-section-heading {
+    padding:0;
+    border:0;
+    box-shadow:none;
+  }
+  .dashboard .orders-panel .shipment-section-heading td {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:9px 10px;
+    box-sizing:border-box;
+  }
+  .dashboard .orders-panel .shipment-section-heading td::before { display:none; }
+  .dashboard .orders-panel .shipment-section-heading strong,
+  .dashboard .orders-panel .shipment-section-heading span { margin:0; font-size:.8125rem; }
+}
