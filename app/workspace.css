@@ -182,3 +182,11 @@
   .dashboard .fulfillment-gauge h3 { font-size:.75rem; }
   .dashboard .timing-total strong { font-size:1.5rem; }
 }
+
+.dashboard .timing-meter { position:relative; width:100%; max-width:180px; margin:8px auto 0; }
+.dashboard .timing-meter svg { display:block; width:100%; height:auto; }
+.dashboard .timing-meter path { fill:none; stroke-width:11; stroke-linecap:round; }
+.dashboard .timing-meter-track { stroke:#edf2ef; }
+.dashboard .timing-meter-fill { stroke:var(--meter-color); }
+.dashboard .timing-meter .timing-total { position:absolute; inset:34% 0 12%; margin:0; justify-content:center; }
+.dashboard .timing-meter-scale { display:flex; justify-content:space-between; max-width:160px; margin:0 auto 10px; color:#667b72; font-size:.6875rem; }
