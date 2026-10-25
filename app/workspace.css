@@ -168,14 +168,10 @@
 .dashboard .fulfillment-gauges { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .dashboard .fulfillment-gauge { min-width:0; padding:14px 12px; border:1px solid var(--line); border-radius:12px; background:#fff; text-align:center; }
 .dashboard .fulfillment-gauge h3 { margin:0; font-size:.8125rem; line-height:1.4; color:#314b41; }
-.dashboard .timing-dial { position:relative; width:100%; max-width:180px; margin:8px auto 0; }
-.dashboard .timing-dial svg { display:block; width:100%; height:auto; }
-.dashboard .timing-dial path { fill:none; stroke-width:11; stroke-linecap:round; }
-.dashboard .timing-dial-track { stroke:#edf2ef; }
-.dashboard .timing-dial-fill { stroke:var(--gauge-color); }
-.dashboard .timing-dial-value { position:absolute; inset:34% 0 12%; display:flex; flex-direction:column; justify-content:center; align-items:center; }
-.dashboard .timing-dial-value strong { color:#17382d; font-size:1.75rem; line-height:1.1; font-variant-numeric:tabular-nums; }
-.dashboard .timing-dial-value span { margin-top:3px; font-size:.6875rem; color:#667b72; }
+.dashboard .timing-total { display:flex; flex-direction:column; align-items:center; gap:4px; margin:18px 0 10px; }
+.dashboard .timing-total strong { color:#17382d; font-size:2rem; line-height:1.1; font-variant-numeric:tabular-nums; }
+.dashboard .timing-total span, .dashboard .timing-sample, .dashboard .timing-note { font-size:.75rem; color:#667b72; }
+.dashboard .timing-note { margin:10px 0 0; line-height:1.5; }
 .dashboard .timing-sample { margin:0; font-size:.75rem; font-weight:700; color:#314b41; }
 .dashboard .timing-definition { margin:5px 0 0; font-size:.6875rem; line-height:1.4; color:#667b72; }
 .dashboard .fulfillment-timing-note { margin-top:9px; }
@@ -184,5 +180,5 @@
   .dashboard .fulfillment-gauges { gap:8px; }
   .dashboard .fulfillment-gauge { padding:12px 8px; }
   .dashboard .fulfillment-gauge h3 { font-size:.75rem; }
-  .dashboard .timing-dial-value strong { font-size:1.5rem; }
+  .dashboard .timing-total strong { font-size:1.5rem; }
 }

@@ -23,15 +23,16 @@ export function fulfillmentTiming(orders: PortalOrder[], now: number) {
     }
     const shipped = Date.parse(order.shipDate ?? "");
     const shipDays = elapsed(ordered, shipped);
-    if (shipDays !== null && ordered >= FULFILLMENT_START) fulfillment.push(shipDays);
-    if (order.status !== "delivered") continue;
+    if (order.status !== "delivered" || ordered < FULFILLMENT_START) continue;
     // Never substitute an ETA, last scan or sync timestamp for actual delivery.
     const delivered = Date.parse(order.tracking?.deliveredAt ?? "");
     const deliveryDays = elapsed(ordered, delivered);
-    if (deliveryDays !== null && (!Number.isFinite(shipped) || shipped <= delivered)) {
+    const transitDays = elapsed(shipped, delivered);
+    // One complete, chronologically valid cohort keeps the component averages additive.
+    if (shipDays !== null && deliveryDays !== null && transitDays !== null) {
+      fulfillment.push(shipDays);
       delivery.push(deliveryDays);
-      const transitDays = elapsed(shipped, delivered);
-      if (shipDays !== null && transitDays !== null) transit.push(transitDays);
+      transit.push(transitDays);
     }
   }
   const average = (samples: number[]): TimingSample => ({
