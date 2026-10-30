@@ -1,0 +1,25 @@
+.compact-login{min-height:100svh;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:16px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom))}
+.compact-login .login-brand{width:100%;text-align:center}
+.compact-login .login-brand-lockup{display:flex;flex-direction:column;gap:6px;justify-content:center;margin:0}
+.compact-login .login-brand-lockup img{width:110px;height:auto;margin:0}
+.compact-login .login-brand h1{font-size:18px;line-height:1.2;letter-spacing:.1em;text-transform:uppercase;margin:0;color:#167655}
+.compact-login .pin-card{width:min(100%,400px);padding:18px;margin:0 auto;border-radius:18px}
+.compact-login .pin-card h2{font-size:21px}
+.compact-login .login-tabs{margin:12px 0 0}
+.compact-login .pin-dots{height:42px;margin:12px 0}
+.compact-login .keypad{gap:8px}
+.compact-login .keypad button{height:46px}
+.compact-login .enter-button{margin-top:12px;min-height:44px;padding:10px}
+.compact-login .pin-card>small{font-size:11px;margin-top:10px}
+.compact-login .login-footer{font-size:10px;letter-spacing:.04em;margin:0;align-self:center}
+.compact-login .email-login{margin-top:16px;gap:12px}
+.compact-login .shipping-notice{background:#fff1f2;border:4px solid #dc2626;box-shadow:0 12px 40px #dc262625;color:#991b1b}
+.compact-login .shipping-notice h2{color:#991b1b;font-size:23px}
+.compact-login .shipping-notice>p{color:#991b1b;font-size:15px;line-height:1.4}
+.shipping-notice address{font-style:normal;font-size:25px;line-height:1.4;font-weight:700;margin:18px 0;padding:14px 8px;background:#dc2626;color:white;border-radius:10px}
+.shipping-notice address strong{font-size:19px}
+.shipping-ack{display:flex;align-items:flex-start;gap:10px;text-align:left;font-size:14px;line-height:1.45}
+.shipping-ack input{width:20px;height:20px;flex-shrink:0;accent-color:#b91c1c}
+.compact-login .shipping-notice .enter-button{background:#b91c1c}
+.notice-back{border:0;background:none;color:#991b1b;text-decoration:underline;padding:12px;cursor:pointer}
+@media(max-height:700px){.compact-login{gap:8px;padding-top:8px;padding-bottom:8px}.compact-login .login-brand-lockup img{width:80px}.compact-login .pin-card{padding:12px 16px}.compact-login .keypad button{height:42px}.compact-login .pin-dots{height:34px;margin:8px 0}.compact-login .login-tabs{margin-top:8px}.shipping-notice address{font-size:22px;margin:12px 0;padding:10px}}
