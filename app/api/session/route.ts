@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   const { data: attempt } = await supabase.from("marsh_pin_attempts").select("failed_count,blocked_until").eq("ip_address", ip).maybeSingle();
   if (attempt?.blocked_until && new Date(attempt.blocked_until).getTime() > Date.now()) return Response.json({ error: "Too many incorrect attempts. Try again in 15 minutes." }, { status: 429 });
   const body = await request.json().catch(() => ({}));
+  if (body.shippingNoticeAcknowledged !== true) return Response.json({ error: "Acknowledge the supply shipment address notice before signing in." }, { status: 400 });
   const mode = body.mode === "email" ? "email" : "pin";
   const pin = typeof body.pin === "string" ? body.pin : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
