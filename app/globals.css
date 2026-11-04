@@ -118,3 +118,10 @@ h1 { margin:0; font-size:clamp(1.8rem,3vw,2.65rem); letter-spacing:-.04em; }
 .stock-allocation{display:block;margin-bottom:7px;color:#176548;font-size:.875rem;white-space:normal}
 
 #production-runs{scroll-margin-top:100px}
+
+.tracking-quota { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px; margin-bottom:18px; border:1px solid var(--border, #d9dee5); border-radius:16px; background:var(--surface, #fff); }
+.tracking-quota strong { display:block; font-size:1.8rem; }
+.tracking-quota strong span { font-size:1rem; font-weight:500; }
+.tracking-quota p { margin:6px 0; }
+.tracking-quota small { display:block; margin-top:5px; color:#64748b; }
+@media(max-width:600px) { .tracking-quota { align-items:flex-start; flex-direction:column; } }

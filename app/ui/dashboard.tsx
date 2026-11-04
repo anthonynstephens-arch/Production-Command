@@ -49,6 +49,7 @@ import ProductionPlan from "./production-plan";
 import OperationalCharts from "./operational-charts";
 import FulfillmentGauges from "./fulfillment-gauges";
 import ShipmentTrackingDetails from "./shipment-tracking";
+import TrackingQuota from "./tracking-quota";
 
 type Supply = {
   mats: number;
@@ -907,6 +908,7 @@ export default function Dashboard({
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
         <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
+          <TrackingQuota refreshKey={lastSync || ""} />
           <div className="order-summary-tiles" aria-label="Order summary">
             <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
             <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
