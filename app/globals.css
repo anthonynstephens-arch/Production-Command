@@ -126,3 +126,13 @@ h1 { margin:0; font-size:clamp(1.8rem,3vw,2.65rem); letter-spacing:-.04em; }
 .tracking-quota small { display:block; margin-top:5px; color:#64748b; }
 @media(max-width:600px) { .tracking-quota { align-items:flex-start; flex-direction:column; } }
 .tracking-quota .tracking-quota-note { max-width:760px; margin-top:14px; padding:12px 14px; border-radius:10px; background:#f1f5f9; color:#334155; font-size:.9rem; line-height:1.6; }
+.next-run-notice { display:grid; grid-template-columns:minmax(0,1fr) 240px; gap:24px; margin-bottom:22px; padding:24px; background:#eff6ff; border:1px solid #bfdbfe; border-left:5px solid #2563eb; border-radius:16px; color:#172554; }
+.next-run-notice h2 { margin:4px 0 10px; }
+.next-run-notice .next-run-date { font-size:1.1rem; font-weight:700; }
+.next-run-notice .sync-button { display:inline-flex; margin-top:10px; text-decoration:none; white-space:normal; }
+.next-run-balance { padding:18px; border-radius:12px; background:#fff; align-self:center; }
+.next-run-balance>span { font-weight:600; }
+.next-run-balance strong { display:block; font-size:2rem; margin:6px 0; }
+.next-run-balance p { margin:6px 0 12px; }
+#incoming-deliveries { scroll-margin-top:100px; }
+@media(max-width:700px) { .next-run-notice { grid-template-columns:1fr; padding:18px; gap:16px; } }

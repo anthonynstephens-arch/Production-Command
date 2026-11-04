@@ -908,6 +908,20 @@ export default function Dashboard({
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
         <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
+          <section className="next-run-notice" aria-labelledby="next-run-notice-title">
+            <div>
+              <p className="eyebrow">GET READY FOR PRODUCTION</p>
+              <h2 id="next-run-notice-title">Next production run</h2>
+              <p className="next-run-date">Monday, November 16, 2026 · 9:00 AM Detroit</p>
+              <p>Please report any incoming mat shipments so we can prepare for the next production run.</p>
+              <a className="sync-button" href="#incoming-deliveries">NOTIFY OF INCOMING MAT SHIPMENT</a>
+            </div>
+            <div className="next-run-balance">
+              <span>Balance due</span><strong>$484.00</strong>
+              <p>$540.00 − $56.00 credit</p>
+              <small>Please arrange payment ahead of the scheduled run.</small>
+            </div>
+          </section>
           <div className="order-summary-tiles" aria-label="Order summary">
             <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
             <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>

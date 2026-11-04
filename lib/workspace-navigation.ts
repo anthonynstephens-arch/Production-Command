@@ -14,7 +14,7 @@ export function workspaceSectionForHash(hash:string):WorkspaceSection {
   if(["pipeline","order-queue"].includes(id))return "orders";
   if(["inventory","supplies","printed-mats"].includes(id))return "inventory";
   if(["production-runs","production-plan","next-production-run"].includes(id))return "production";
-  if(["operations","payment-entry"].includes(id))return "financial";
+  if(["operations","payment-entry","incoming-deliveries"].includes(id))return "financial";
   if(id==="defective-mats")return "defects";
   if(id==="mat-sales")return "sales";
   if(["portal-users","portal-access"].includes(id))return "team";
