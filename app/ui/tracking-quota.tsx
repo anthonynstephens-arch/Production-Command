@@ -30,6 +30,7 @@ export default function TrackingQuota({ refreshKey }: { refreshKey: string }) {
       <strong>{quota ? quota.remaining.toLocaleString() : "—"} <span>trackings remaining</span></strong>
       {quota && <p>{quota.used.toLocaleString()} used · {quota.total.toLocaleString()} total</p>}
       <small>Shared account balance for registering new tracking numbers.</small>
+      <p className="tracking-quota-note">Your initial 200 tracking credits are included. Once those credits are used, a payment of <b>$119</b> is required to add <b>5,000 tracking credits</b> and continue tracking new shipments. Each credit covers one new tracking number; shipments already registered continue to receive tracking updates.</p>
       {quota && <small>Checked {new Date(quota.checkedAt).toLocaleString("en-US", { timeZone: "America/Detroit" })} ET{error ? " · Last known balance" : ""}</small>}
       {low && <p className="sync-error">{quota.remaining === 0 ? "Quota exhausted. New tracking numbers cannot be registered." : "Tracking quota is running low."}</p>}
       {error && <p className="sync-error" role="status">{error}</p>}

@@ -908,7 +908,6 @@ export default function Dashboard({
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
         <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
-          <TrackingQuota refreshKey={lastSync || ""} />
           <div className="order-summary-tiles" aria-label="Order summary">
             <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
             <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
@@ -1410,6 +1409,10 @@ export default function Dashboard({
         </section>
         </div>
         <div className="workspace-pane" data-workspace="inventory" hidden={activeSection!=="inventory"}>
+        <section aria-labelledby="tracking-credits-heading">
+          <div className="dashboard-section-heading"><div><h2 id="tracking-credits-heading">Shipment Tracking Credits</h2></div><p>17TRACK account balance</p></div>
+          <TrackingQuota refreshKey={lastSync || ""} />
+        </section>
         {!inventoryLoaded||!finishedMatsLoaded?<p role="status">Loading inventory…</p>:null}
         <div hidden={!inventoryLoaded||!finishedMatsLoaded}>
         <div className="dashboard-section-heading" id="inventory">

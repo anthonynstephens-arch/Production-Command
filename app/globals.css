@@ -125,3 +125,4 @@ h1 { margin:0; font-size:clamp(1.8rem,3vw,2.65rem); letter-spacing:-.04em; }
 .tracking-quota p { margin:6px 0; }
 .tracking-quota small { display:block; margin-top:5px; color:#64748b; }
 @media(max-width:600px) { .tracking-quota { align-items:flex-start; flex-direction:column; } }
+.tracking-quota .tracking-quota-note { max-width:760px; margin-top:14px; padding:12px 14px; border-radius:10px; background:#f1f5f9; color:#334155; font-size:.9rem; line-height:1.6; }
