@@ -36,6 +36,8 @@ import type { PortalOrder } from "@/lib/shipstation";
 import { designKey, getMatAvailability } from "@/lib/mat-availability";
 import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
+import PortalNotice from "./portal-notice";
+import ShippingAddressBanner from "./shipping-address-banner";
 import PortalAccess from "./portal-access";
 import NotificationSettings, {
   disconnectPushDevice,
@@ -908,6 +910,7 @@ export default function Dashboard({
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
         <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
+        <ShippingAddressBanner />
           <section className="next-run-notice" aria-labelledby="next-run-notice-title">
             <div>
               <p className="eyebrow">GET READY FOR PRODUCTION</p>
@@ -1822,6 +1825,7 @@ export default function Dashboard({
         <PortalAccess />
         {session.role === "admin" && view === "admin" && <AccessManager />}
         </div>
+        <PortalNotice isAdmin={session.role === "admin"} showEditor={activeSection === "team" && view === "admin"} />
         <Messenger session={session} />
       </div>
     </main>
