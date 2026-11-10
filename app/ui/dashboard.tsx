@@ -920,8 +920,8 @@ export default function Dashboard({
               <a className="sync-button" href="#incoming-deliveries">NOTIFY OF INCOMING MAT SHIPMENT</a>
             </div>
             <div className="next-run-balance">
-              <span>Balance due</span><strong>$524.00</strong>
-              <p>$580.00 − $56.00 credit</p>
+              <span>Balance due</span><strong>$504.00</strong>
+              <p>$560.00 − $56.00 credit</p>
               <small>Please arrange payment ahead of the scheduled run.</small>
             </div>
           </section>
