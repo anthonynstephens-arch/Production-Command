@@ -2,6 +2,10 @@
 
 Standalone Production Command module for Marsh Supply inventory and ShipStation fulfillment visibility.
 
+## Printed mat low-stock alerts
+
+Printed designs with 5 or fewer available after pending-order commitments use the existing pulsing supply warning and triangle symbol. Inventory highlights the affected cards; Overview lists only those designs with on-hand, committed and available counts, plus a link to printed inventory. Alerts wait until order and stock data have loaded. The warning clears above 5 available. Reduced-motion settings retain a static red warning.
+
 ## Environment
 
 - `SHIPSTATION_API_KEY`: server-only ShipStation API v2 key.

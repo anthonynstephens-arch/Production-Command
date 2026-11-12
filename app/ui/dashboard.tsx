@@ -52,6 +52,7 @@ import OperationalCharts from "./operational-charts";
 import FulfillmentGauges from "./fulfillment-gauges";
 import ShipmentTrackingDetails from "./shipment-tracking";
 import TrackingQuota from "./tracking-quota";
+import FinishedMatCard, { PrintedMatLowStock } from "./finished-mat-card";
 
 type Supply = {
   mats: number;
@@ -982,6 +983,7 @@ export default function Dashboard({
           </div>
         </section>
 
+        <PrintedMatLowStock mats={finishedMatCards} stockChecked={matStockChecked} />
         <FulfillmentGauges orders={orders} />
         <div className="overview-shortcuts"><a href="#order-queue"><PackageCheck size={22}/><strong>Work the order queue</strong><span>{pipelineOrders} pending · {matAvailability.readyOrderIds.size} covered by printed stock</span></a><a href="#production-runs"><Factory size={22}/><strong>Manage production runs</strong><span>Schedule, track, and reconcile each batch</span></a><a href="#operations"><CreditCard size={22}/><strong>Review the account</strong><span>Payments, credits, and incoming deliveries</span></a></div>
         <section className="insights-row cadence-only">
@@ -1557,25 +1559,7 @@ export default function Dashboard({
           <p>Finished on hand · committed · available</p>
         </div>
         <section className="finished-mats-grid">
-          {finishedMatCards.map((mat) => (
-            <article className="finished-mat-card" key={mat.design_key}>
-              <div>
-                <span>READY STOCK</span>
-                <h3>{mat.design_name}</h3>
-              </div>
-              <strong>{mat.quantity}</strong>
-              <div className="allocation">
-                <div>
-                  <span>Committed</span>
-                  <b>{mat.committed}</b>
-                </div>
-                <div>
-                  <span>Available</span>
-                  <b>{mat.available}</b>
-                </div>
-              </div>
-            </article>
-          ))}
+          {finishedMatCards.map((mat) => <FinishedMatCard key={mat.design_key} mat={mat} stockChecked={matStockChecked} />)}
           {view === "admin" && (
             <article className="finished-mat-card print-batch-card">
               <div>
