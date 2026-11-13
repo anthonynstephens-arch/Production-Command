@@ -38,6 +38,7 @@ import type { PortalSession } from "@/lib/auth";
 import AccessManager from "./access-manager";
 import PortalNotice from "./portal-notice";
 import ShippingAddressBanner from "./shipping-address-banner";
+import ProductionReadiness from "./production-readiness";
 import PortalAccess from "./portal-access";
 import NotificationSettings, {
   disconnectPushDevice,
@@ -910,107 +911,56 @@ export default function Dashboard({
         )}
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
-        <div className="workspace-pane" data-workspace="overview" hidden={activeSection!=="overview"}>
-        <ShippingAddressBanner />
-          <section className="next-run-notice" aria-labelledby="next-run-notice-title">
-            <div>
-              <p className="eyebrow">GET READY FOR PRODUCTION</p>
-              <h2 id="next-run-notice-title">Next production run</h2>
-              <p className="next-run-date">Monday, November 16, 2026 · 9:00 AM Detroit</p>
-              <p>Please report any incoming mat shipments so we can prepare for the next production run.</p>
-              <a className="sync-button" href="#incoming-deliveries">NOTIFY OF INCOMING MAT SHIPMENT</a>
+        <div className="workspace-pane marsh-overview" id="overview" data-workspace="overview" hidden={activeSection!=="overview"}>
+          <ShippingAddressBanner />
+          <ProductionReadiness />
+
+          <section className="overview-activity" aria-labelledby="overview-activity-title">
+            <div className="overview-section-title">
+              <div><p className="eyebrow">AT A GLANCE</p><h2 id="overview-activity-title">Order activity</h2></div>
+              <a href="#order-queue">View all orders <ExternalLink size={15} aria-hidden="true" /></a>
             </div>
-            <div className="next-run-balance">
-              <span>Balance due</span><strong>$504.00</strong>
-              <p>$560.00 − $56.00 credit</p>
-              <small>Please arrange payment ahead of the scheduled run.</small>
+            <div className="order-summary-tiles" aria-label="Order activity summary">
+              <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
+              <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
+              <article className="order-summary-tile delivered"><PackageCheck size={20} aria-hidden="true"/><div><span>Delivered today</span><strong>{deliveredToday}</strong><small>Confirmed delivery · Detroit time</small></div></article>
             </div>
           </section>
-          <div className="order-summary-tiles" aria-label="Order summary">
-            <article className="order-summary-tile pending"><PackageOpen size={20} aria-hidden="true"/><div><span>Pending Orders</span><strong>{orders.filter(order => order.status === "pending").length}</strong></div></article>
-            <article className="order-summary-tile transit"><Truck size={20} aria-hidden="true"/><div><span>Orders in Transit</span><strong>{orders.filter(order => order.status === "shipped").length}</strong></div></article>
-            <article className="order-summary-tile delivered"><PackageCheck size={20} aria-hidden="true"/><div><span>Orders Delivered Today</span><strong>{deliveredToday}</strong><small>Confirmed delivery · Detroit time</small></div></article>
-          </div>
-        <section className="overview-summary" id="overview">
-          <div className="overview-topline">
-            <p className="kicker">AT A GLANCE</p>
 
-          </div>
-          <div className="overview-alerts" aria-label="Fulfillment alerts">
-            {heldOrderIds.size > 0 && <a className="summary-copy order-issue-alert" href="#order-queue">
-              <Flag size={19}/><span><strong>{heldOrderIds.size} orders unable to ship</strong>
-              <small>{currentOrderIssues.length} flagged issues · Review holds</small></span>
-            </a>}
-            {blockedMatOrders.size > 0 && <a className="summary-copy mat-shortage-alert" href="#inventory">
-              <AlertTriangle size={19}/><span><strong>{matAvailability.missingMats} additional mats needed</strong>
-              <small>{blockedMatOrders.size} orders blocked · 40 mat run minimum</small></span>
-            </a>}
-            {balanceOwed > 0 && <a className="summary-copy balance-alert" href="#operations">
-              <AlertTriangle size={19}/><span><strong>Payment due: {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(balanceOwed)}</strong>
-              <small>View charges and payments</small></span>
-            </a>}
-            <a className={`summary-copy${lowSupplyNames.length ? " attention" : ""}`} href="#supplies">
-              {lowSupplyNames.length ? <AlertTriangle size={19}/> : <PackageCheck size={19}/>}
-              <span><strong>{!matStockChecked ? "Checking supplies…" : lowSupplyNames.length ? "Replenish " + lowSupplyNames.join(", ") : "Inventory is ready"}</strong>
-              <small>{matStockChecked ? availableCapacity + " additional orders supported" : "Refreshing available stock"}</small></span>
-            </a>
-            <a className="summary-copy shipping-update" href="#order-queue">
-              <Truck size={19}/><span><strong>{orders.filter(order => order.status !== "pending" && Date.parse(order.shipDate ?? "") >= Date.now() - 86400000).length} orders shipped in 24 hours</strong>
-              <small>{orders.filter(order => order.status === "shipped").length} in transit · {orders.filter(order => order.status === "delivered").length} delivered</small></span>
-            </a>
-          </div>
-          <div className="summary-stats">
-            <div>
-              <span>Pending orders</span>
-              <strong>{pipelineOrders} orders</strong>
+          <section className="overview-health" aria-labelledby="overview-health-title">
+            <div className="overview-section-title">
+              <div><p className="eyebrow">OPERATIONS</p><h2 id="overview-health-title">Needs attention</h2></div>
             </div>
-            <div>
-              <span>Shipping issues</span>
-              <strong>{currentOrderIssues.length}</strong>
+            <div className="overview-health-items">
+              {heldOrderIds.size > 0 && <a className="overview-health-item critical" href="#order-queue">
+                <Flag size={19} aria-hidden="true"/><span><strong>{heldOrderIds.size} orders unable to ship</strong><small>{currentOrderIssues.length} flagged issues · Review holds</small></span><ExternalLink size={16} aria-hidden="true"/>
+              </a>}
+              {blockedMatOrders.size > 0 && <a className="overview-health-item warning" href="#inventory">
+                <AlertTriangle size={19} aria-hidden="true"/><span><strong>{matAvailability.missingMats} additional mats needed</strong><small>{blockedMatOrders.size} orders blocked · 40 mat run minimum</small></span><ExternalLink size={16} aria-hidden="true"/>
+              </a>}
+              {lowSupplyNames.length > 0 && <a className="overview-health-item warning" href="#supplies">
+                <AlertTriangle size={19} aria-hidden="true"/><span><strong>Replenish {lowSupplyNames.join(", ")}</strong><small>{availableCapacity} additional orders supported</small></span><ExternalLink size={16} aria-hidden="true"/>
+              </a>}
+              {!matStockChecked && <p className="overview-health-clear"><RefreshCw size={18} aria-hidden="true"/> Checking inventory and order availability…</p>}
+              {matStockChecked && heldOrderIds.size === 0 && blockedMatOrders.size === 0 && lowSupplyNames.length === 0 &&
+                <p className="overview-health-clear"><CircleCheck size={19} aria-hidden="true"/> No urgent fulfillment issues. Your inventory and order pipeline are ready.</p>}
             </div>
-            <div>
-              <span>Unable to fulfill · mats</span>
-              <strong>{matStockChecked ? `${blockedMatOrders.size} orders` : "Checking stock…"}</strong>
-            </div>
-            <div>
-              <span>New in 7 days</span>
-              <strong>{newOrdersThisWeek}</strong>
-            </div>
-            <div>
-              <span>Available capacity</span>
-              <strong>{availableCapacity} orders</strong>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        <PrintedMatLowStock mats={finishedMatCards} stockChecked={matStockChecked} />
-        <FulfillmentGauges orders={orders} />
-        <div className="overview-shortcuts"><a href="#order-queue"><PackageCheck size={22}/><strong>Work the order queue</strong><span>{pipelineOrders} pending · {matAvailability.readyOrderIds.size} covered by printed stock</span></a><a href="#production-runs"><Factory size={22}/><strong>Manage production runs</strong><span>Schedule, track, and reconcile each batch</span></a><a href="#operations"><CreditCard size={22}/><strong>Review the account</strong><span>Payments, credits, and incoming deliveries</span></a></div>
-        <section className="insights-row cadence-only">
-          <article className="panel cadence-panel">
-            <p className="eyebrow">FULFILLMENT CADENCE</p>
-            <h2>Monday · Wednesday · Friday</h2>
-            <p>
-              Orders are prepared and processed through ShipStation three days
-              each week.
-            </p>
-            <div className="cadence-days">
-              <span className="active">M</span>
-              <span>T</span>
-              <span className="active">W</span>
-              <span>T</span>
-              <span className="active">F</span>
-              <span>S</span>
-              <span>S</span>
-            </div>
-            <div className="next-run">
-              <Truck size={17} />
-              <span>Next processing run</span>
-              <strong>{(() => { const today = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(new Intl.DateTimeFormat("en-US",{weekday:"short",timeZone:"America/Detroit"}).format(new Date())); const offset = [1,3,5].map(day => (day-today+7)%7).sort((a,b)=>a-b)[0]; return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][(today+offset)%7]; })()}</strong>
-            </div>
-          </article>
-        </section>
+          <PrintedMatLowStock mats={finishedMatCards} stockChecked={matStockChecked} />
 
+          <section className="overview-quick" aria-labelledby="overview-quick-title">
+            <div className="overview-section-title"><div><p className="eyebrow">SHORTCUTS</p><h2 id="overview-quick-title">Quick actions</h2></div></div>
+            <div className="overview-shortcuts">
+              <a href="#order-queue"><PackageCheck size={20} aria-hidden="true"/><strong>Order queue</strong><span>Prepare shipments and review holds</span></a>
+              <a href="#production-runs"><Factory size={20} aria-hidden="true"/><strong>Production runs</strong><span>Plan and reconcile a batch</span></a>
+              <a href="#operations"><CreditCard size={20} aria-hidden="true"/><strong>Payments & deliveries</strong><span>Review balances and incoming stock</span></a>
+            </div>
+          </section>
+          <details className="overview-more">
+            <summary>Show detailed fulfillment metrics <ChevronDown size={17} aria-hidden="true"/></summary>
+            <FulfillmentGauges orders={orders} />
+          </details>
         </div>
         <div className="workspace-pane" data-workspace="orders" hidden={activeSection!=="orders"}>
         <div
