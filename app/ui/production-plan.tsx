@@ -59,6 +59,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<"current" | "next">("current");
   const [cancelReason, setCancelReason] = useState("");
   const [replacementDate, setReplacementDate] = useState("");
   const [replacementTime, setReplacementTime] = useState("09:00");
@@ -150,12 +151,12 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   };
   const cancelRun = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!plan || saving) return;
+    if (saving || (cancelTarget === "current" ? !plan : !nextRun)) return;
     setSaving(true); mutation.current = { busy: true, version: mutation.current.version + 1 }; setMessage("");
     try {
-      const response = await fetch("/api/production-cancellation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: plan.run_id, expected_updated_at: plan.updated_at, reason: cancelReason, replacement_date: replacementDate, replacement_time: replacementTime }) });
+      const response = await fetch("/api/production-cancellation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: cancelTarget, run_id: plan?.run_id, expected_updated_at: cancelTarget === "current" ? plan?.updated_at : nextRun?.updated_at, reason: cancelReason, replacement_date: replacementDate, replacement_time: replacementTime }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not cancel the run.");
-      setPlan(data.plan); onPlanChange?.(data.plan); setNextRun(data.next); setCancelOpen(false); setCancelReason("");
+      if (cancelTarget === "current") { setPlan(data.plan); onPlanChange?.(data.plan); } setNextRun(data.next); setCancelOpen(false); setCancelReason("");
       window.dispatchEvent(new Event("marsh-production-changed")); setMessage("Run cancelled and replacement scheduled.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not cancel the run."); }
     finally { mutation.current.busy = false; setSaving(false); }
@@ -197,11 +198,11 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
           <h2 id="production-plan-title">Current production run</h2>
           <span>{loading ? "Loading…" : plan ? `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(plan.scheduled_date + "T12:00:00Z"))} · ${prettyTime(plan.scheduled_time)} Detroit · 40 mats` : "No run scheduled"}</span>
         </div>
-        {isAdmin && plan && currentStage === "scheduled" && <div><button type="button" className="plan-edit-button" disabled={saving} onClick={() => toggleEditor("current")}>Edit current schedule</button> <button type="button" className="plan-edit-button" disabled={saving || editing} onClick={() => { setReplacementDate(nextRunDate()); setCancelOpen(!cancelOpen); }}>Cancel run</button></div>}
+        {isAdmin && plan && currentStage === "scheduled" && <div><button type="button" className="plan-edit-button" disabled={saving} onClick={() => toggleEditor("current")}>Edit current schedule</button> <button type="button" className="plan-edit-button" disabled={saving || editing} onClick={() => { setCancelTarget("current"); setReplacementDate(nextRunDate()); setCancelOpen(!cancelOpen); }}>Cancel run</button></div>}
       </div>
 
       {cancelOpen && <form className="production-plan-form" onSubmit={cancelRun}>
-        <h3>Cancel this production run</h3><label>Reason for cancellation<textarea required maxLength={1000} value={cancelReason} onChange={e => setCancelReason(e.target.value)} /></label>
+        <h3>Cancel {cancelTarget === "next" ? "the next" : "this"} production run</h3><label>Reason for cancellation<textarea required maxLength={1000} value={cancelReason} onChange={e => setCancelReason(e.target.value)} /></label>
         <div className="plan-date-fields"><label>Next run date<input type="date" required min={detroitToday()} value={replacementDate} onChange={e => setReplacementDate(e.target.value)} /></label><label>Start time · Detroit<input type="time" required value={replacementTime} onChange={e => setReplacementTime(e.target.value)} /></label></div>
         <p>Orders not covered by available stock will be delayed until two days after the replacement run.</p><button type="submit" disabled={saving}>Confirm cancellation</button> <button type="button" onClick={() => setCancelOpen(false)}>Back</button>
       </form>}
@@ -249,6 +250,7 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
           </div>
           {isAdmin && !loading && <div className="next-production-actions">
             <button type="button" disabled={saving} className="plan-edit-button" onClick={() => toggleEditor("next")}>{editing && !editingCurrent ? "Close editor" : nextRun ? "Edit next run" : "Plan next run"}</button>
+            {nextRun && !nextRun.is_tbd && !editing && <button type="button" disabled={saving} className="plan-edit-button" onClick={() => {setCancelTarget("next"); setReplacementDate(nextRunDate()); setCancelOpen(true); document.getElementById("production-plan")?.scrollIntoView({behavior:"smooth"});}}>Cancel next run</button>}
             {nextRun && canStartNext && !editing && <button type="button" disabled={saving} className="plan-edit-button" onClick={() => void startNext()}>Start PRINTING</button>}
           </div>}
         </div>
