@@ -49,6 +49,7 @@ import FinancialLogistics from "./financial-logistics";
 import Messenger from "./messenger";
 import OrderIssueHistory from "./order-issue-history";
 import ProductionPlan from "./production-plan";
+import ProductionDelayNotice from "./production-delay-notice";
 import OperationalCharts from "./operational-charts";
 import FulfillmentGauges from "./fulfillment-gauges";
 import ShipmentTrackingDetails from "./shipment-tracking";
@@ -912,6 +913,7 @@ export default function Dashboard({
 
         {stockError&&<p className="sync-error" role="alert">{stockError} <button onClick={()=>{void sync()}}>Retry</button></p>}
         <div className="workspace-pane marsh-overview" id="overview" data-workspace="overview" hidden={activeSection!=="overview"}>
+          <ProductionDelayNotice isAdmin={session.role === "admin" && view === "admin"} />
           <ShippingAddressBanner />
           <ProductionReadiness />
 

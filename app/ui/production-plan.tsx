@@ -58,12 +58,16 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
   const [mix, setMix] = useState<Record<MixKey, number>>({ whatupdoe: 10, did_you_call_first: 10, upside_down_welcome: 10, marsh_supply: 10 });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [replacementDate, setReplacementDate] = useState("");
+  const [replacementTime, setReplacementTime] = useState("09:00");
   const [loadError, setLoadError] = useState("");
   const [editVersion, setEditVersion] = useState<string | null>(null);
   const mutation = useRef({ busy: false, version: 0 });
   const now = useRunClock(plan);
   const currentStage = plan ? stageAt(plan, now) : "scheduled";
-  const canStartNext = !plan || currentStage === "completed";
+  const canStartNext = !plan || (currentStage === "completed" || currentStage === "cancelled");
 
   useEffect(() => {
     if (!editing) setDate(nextRunDate());
@@ -144,6 +148,18 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
       setMessage(error instanceof Error ? error.message : "Could not update the stage.");
     } finally { mutation.current.busy = false; setSaving(false); }
   };
+  const cancelRun = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!plan || saving) return;
+    setSaving(true); mutation.current = { busy: true, version: mutation.current.version + 1 }; setMessage("");
+    try {
+      const response = await fetch("/api/production-cancellation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: plan.run_id, expected_updated_at: plan.updated_at, reason: cancelReason, replacement_date: replacementDate, replacement_time: replacementTime }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not cancel the run.");
+      setPlan(data.plan); onPlanChange?.(data.plan); setNextRun(data.next); setCancelOpen(false); setCancelReason("");
+      window.dispatchEvent(new Event("marsh-production-changed")); setMessage("Run cancelled and replacement scheduled.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not cancel the run."); }
+    finally { mutation.current.busy = false; setSaving(false); }
+  };
   const toggleEditor = (target: "next" | "current") => {
     if (saving) return;
     if (editing) { setEditing(false); return; }
@@ -181,10 +197,16 @@ export default function ProductionPlan({ isAdmin, blankMats, pendingByDesign, fi
           <h2 id="production-plan-title">Current production run</h2>
           <span>{loading ? "Loading…" : plan ? `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(plan.scheduled_date + "T12:00:00Z"))} · ${prettyTime(plan.scheduled_time)} Detroit · 40 mats` : "No run scheduled"}</span>
         </div>
-        {isAdmin && plan && currentStage === "scheduled" && <button type="button" className="plan-edit-button" disabled={saving} onClick={() => toggleEditor("current")}>Edit current schedule</button>}
+        {isAdmin && plan && currentStage === "scheduled" && <div><button type="button" className="plan-edit-button" disabled={saving} onClick={() => toggleEditor("current")}>Edit current schedule</button> <button type="button" className="plan-edit-button" disabled={saving || editing} onClick={() => { setReplacementDate(nextRunDate()); setCancelOpen(!cancelOpen); }}>Cancel run</button></div>}
       </div>
 
-      {plan && <div className="run-progress">
+      {cancelOpen && <form className="production-plan-form" onSubmit={cancelRun}>
+        <h3>Cancel this production run</h3><label>Reason for cancellation<textarea required maxLength={1000} value={cancelReason} onChange={e => setCancelReason(e.target.value)} /></label>
+        <div className="plan-date-fields"><label>Next run date<input type="date" required min={detroitToday()} value={replacementDate} onChange={e => setReplacementDate(e.target.value)} /></label><label>Start time · Detroit<input type="time" required value={replacementTime} onChange={e => setReplacementTime(e.target.value)} /></label></div>
+        <p>Orders not covered by available stock will be delayed until two days after the replacement run.</p><button type="submit" disabled={saving}>Confirm cancellation</button> <button type="button" onClick={() => setCancelOpen(false)}>Back</button>
+      </form>}
+      {plan && currentStage === "cancelled" && <p className="plan-warning"><AlertTriangle size={17}/> This production run was cancelled. See the replacement run below.</p>}
+      {plan && currentStage !== "cancelled" && <div className="run-progress">
         <ol className="run-stage-list" aria-label="Production stages">
           {(["printing", "drying", "packaging"] as const).map((stage, index) => {
             const rank = ["scheduled", "printing", "drying", "packaging", "completed"].indexOf(currentStage);

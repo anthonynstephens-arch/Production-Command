@@ -1,4 +1,4 @@
-export type ProductionStage = "scheduled" | "printing" | "drying" | "packaging" | "completed";
+export type ProductionStage = "scheduled" | "printing" | "drying" | "packaging" | "completed" | "cancelled";
 export type MixKey = "whatupdoe" | "did_you_call_first" | "upside_down_welcome" | "marsh_supply";
 export type Plan = Record<MixKey, number> & {
   run_id: string; stage: ProductionStage; scheduled_date: string; scheduled_time: string; updated_at: string;
@@ -7,7 +7,7 @@ export type Plan = Record<MixKey, number> & {
 };
 export const stageLabels: Record<ProductionStage, string> = {
   scheduled: "SCHEDULED", printing: "PRINTING", drying: "DRYING",
-  packaging: "PACKAGING FOR SHIPMENT", completed: "COMPLETED"
+  packaging: "PACKAGING FOR SHIPMENT", completed: "COMPLETED", cancelled: "CANCELLED"
 };
 export function stageAt(plan: Plan, now: number): ProductionStage {
   return plan.stage === "drying" && plan.drying_ends_at && Date.parse(plan.drying_ends_at) <= now
