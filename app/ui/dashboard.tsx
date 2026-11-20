@@ -879,7 +879,7 @@ export default function Dashboard({
         <nav className="dashboard-nav" aria-label="Dashboard sections">
           <div className="dashboard-nav-heading">WORKSPACE <span>Marsh Supply</span></div>
           {workspaceSections.map(section=><a key={section.id} href={section.href} aria-current={activeSection===section.id?"page":undefined}><span className="nav-marker" aria-hidden="true">{section.number}</span>{section.label}</a>)}
-          <div className="nav-utilities"><NotificationSettings isAdmin={session.role === "admin"}/><a href="/marsh-service-agreement.pdf" target="_blank" rel="noreferrer"><ShieldCheck size={16}/> Service agreement</a></div>
+          <div className="nav-utilities"><NotificationSettings isAdmin={session.role === "admin"}/><a href="/api/agreement/agreement" target="_blank" rel="noreferrer"><ShieldCheck size={16}/> Service agreement</a><a href="/api/agreement/schedule-c" target="_blank" rel="noreferrer"><ShieldCheck size={16}/> Schedule C</a></div>
         </nav>
         <div className="workspace-header"><div><p className="eyebrow">MARSH SUPPLY · FULFILLMENT</p><h1>{workspaceSections.find(section=>section.id===activeSection)?.label}</h1><p>{workspaceSections.find(section=>section.id===activeSection)?.description}</p></div><button className="sync-button" onClick={sync} disabled={syncing}><RefreshCw size={17} className={syncing?"spin":""}/>{syncing?"Refreshing…":"Refresh data"}</button></div>
         <label className="workspace-mobile-select">Go to section<select value={activeSection} onChange={e=>{window.location.hash=workspaceSections.find(section=>section.id===e.target.value)!.href.slice(1)}}>{workspaceSections.map(section=><option key={section.id} value={section.id}>{section.label}</option>)}</select></label>
