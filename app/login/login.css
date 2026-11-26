@@ -23,3 +23,5 @@
 .compact-login .shipping-notice .enter-button{background:#b91c1c}
 .notice-back{border:0;background:none;color:#991b1b;text-decoration:underline;padding:12px;cursor:pointer}
 @media(max-height:700px){.compact-login{gap:8px;padding-top:8px;padding-bottom:8px}.compact-login .login-brand-lockup img{width:80px}.compact-login .pin-card{padding:12px 16px}.compact-login .keypad button{height:42px}.compact-login .pin-dots{height:34px;margin:8px 0}.compact-login .login-tabs{margin-top:8px}.shipping-notice address{font-size:22px;margin:12px 0;padding:10px}}
+
+.compact-login .portal-closed {text-align:center;padding:28px 24px}.portal-closed-label {font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#167655}.compact-login .portal-closed h2 {margin:12px 0;color:#1b2b25}.portal-closed p {color:#53635b;line-height:1.6;margin:0}.portal-lock {position:fixed;right:18px;bottom:16px;background:transparent;border:0;color:#89988f;padding:8px;cursor:pointer}.portal-lock:focus-visible {outline:2px solid #167655;outline-offset:2px}
